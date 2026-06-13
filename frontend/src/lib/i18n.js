@@ -12,6 +12,7 @@ const localTranslations = {
     Password: "كلمة المرور",
     "Sign in": "دخول",
     Logout: "تسجيل الخروج",
+    "Record production batches, materials, waste, loss, and final cost.": "سجّل دفعات الإنتاج والمواد والهالك والفاقد والتكلفة النهائية.",
   },
 }
 
