@@ -2,10 +2,15 @@
 import { computed, reactive, ref, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import { call } from "@/lib/api"
-import { session } from "@/stores/session"
+import { session, signOut } from "@/stores/session"
 import { createDraft, calc, fmt, fmt1, productByKey } from "./data"
 
 const router = useRouter()
+
+async function logout() {
+  await signOut()
+  router.replace("/login")
+}
 
 const stored = sessionStorage.getItem("foodLoggerDraft")
 const draft = reactive(stored ? JSON.parse(stored) : createDraft())
@@ -77,6 +82,10 @@ onUnmounted(() => clearInterval(timer))
           <div class="w-9 h-9 rounded-full border-2 border-white/40 bg-white/20 flex items-center justify-center">
             <i class="fa-solid fa-user text-white text-sm"></i>
           </div>
+          <button @click="logout" title="تسجيل الخروج" class="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 transition-colors rounded-xl px-3 py-1.5 text-white">
+            <i class="fa-solid fa-right-from-bracket text-sm"></i>
+            <span class="text-sm font-semibold hidden sm:inline">تسجيل الخروج</span>
+          </button>
         </div>
       </div>
 
