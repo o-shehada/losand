@@ -2,7 +2,8 @@
 import { reactive, computed, ref, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import { session, signOut } from "@/stores/session"
-import { createDraft, calc, fmt, fmt1, products, productByKey } from "./data"
+import { call } from "@/lib/api"
+import { createDraft, calc, fmt, fmt1, products, productByKey, materialFromItem } from "./data"
 
 const router = useRouter()
 
@@ -17,6 +18,22 @@ const draft = reactive(saved ? JSON.parse(saved) : createDraft())
 const totals = computed(() => calc(draft))
 const selectedProduct = computed(() => productByKey(draft.product))
 const completed = computed(() => draft.materials.filter((m) => Number(m.actual) > 0).length)
+
+// Raw materials sourced from ERPNext Items (Raw Material group)
+const availableMaterials = ref([])
+const materialsLoading = ref(true)
+const showPicker = ref(false)
+const addableMaterials = computed(() => {
+  const used = new Set(draft.materials.map((m) => m.item_code))
+  return availableMaterials.value.filter((it) => !used.has(it.item_code))
+})
+function addMaterial(it) {
+  draft.materials.push(materialFromItem(it, draft.materials.length))
+  showPicker.value = false
+}
+function removeMaterial(i) {
+  draft.materials.splice(i, 1)
+}
 
 function selectProduct(key) {
   draft.product = key
@@ -54,9 +71,25 @@ function tick() {
   if (h === 0) h = 12
   liveTime.value = `${h}:${m} ${period}`
 }
+async function loadMaterials() {
+  materialsLoading.value = true
+  try {
+    const list = await call("losand.api.manufacture.get_raw_materials")
+    availableMaterials.value = list || []
+    if (!draft.materials.length) {
+      draft.materials = (list || []).map((it, i) => materialFromItem(it, i))
+    }
+  } catch (e) {
+    // leave list empty on failure
+  } finally {
+    materialsLoading.value = false
+  }
+}
+
 onMounted(() => {
   tick()
   timer = setInterval(tick, 60000)
+  loadMaterials()
 })
 onUnmounted(() => clearInterval(timer))
 </script>
@@ -198,10 +231,24 @@ onUnmounted(() => clearInterval(timer))
           </div>
           <h2 class="text-base font-bold text-text">المواد الخام</h2>
           <div class="flex-1 h-px bg-border"></div>
-          <button class="flex items-center gap-1.5 text-primary text-xs font-semibold bg-primary-light px-3 py-1.5 rounded-lg border border-primary/20">
-            <i class="fa-solid fa-plus text-xs"></i>
-            إضافة مادة
-          </button>
+          <div class="relative">
+            <button @click="showPicker = !showPicker" class="flex items-center gap-1.5 text-primary text-xs font-semibold bg-primary-light px-3 py-1.5 rounded-lg border border-primary/20 hover:bg-primary/10 transition-colors">
+              <i class="fa-solid fa-plus text-xs"></i>
+              إضافة مادة
+            </button>
+            <div v-if="showPicker" class="absolute left-0 mt-2 w-72 bg-white border border-border rounded-xl shadow-lg z-30 p-2 max-h-72 overflow-auto">
+              <p class="text-xs text-muted px-2 py-1 font-semibold">أصناف من ERPNext (Raw Material)</p>
+              <p v-if="!addableMaterials.length" class="text-xs text-muted text-center py-4">لا توجد مواد إضافية</p>
+              <button v-for="it in addableMaterials" :key="it.item_code" @click="addMaterial(it)"
+                class="w-full text-right px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center justify-between gap-2">
+                <span>
+                  <span class="block text-sm text-text font-semibold">{{ it.name_ar }}</span>
+                  <span class="block text-xs text-muted">{{ it.item_code }}</span>
+                </span>
+                <span class="text-xs font-bold text-primary whitespace-nowrap">{{ fmt(it.rate) }} ر.س</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
@@ -213,8 +260,15 @@ onUnmounted(() => clearInterval(timer))
             <div class="col-span-2 text-xs font-bold text-muted text-center">التكلفة/وحدة</div>
           </div>
 
-          <div v-for="(m, i) in draft.materials" :key="i"
-            class="grid grid-cols-12 px-4 py-3.5 items-center hover:bg-slate-50/50 transition-colors"
+          <div v-if="materialsLoading && !draft.materials.length" class="px-4 py-8 text-center text-sm text-muted">
+            <i class="fa-solid fa-spinner fa-spin ml-2"></i> جارٍ تحميل المواد من الأصناف...
+          </div>
+          <div v-else-if="!draft.materials.length" class="px-4 py-8 text-center text-sm text-muted">
+            لا توجد مواد خام — استخدم «إضافة مادة» لاختيار صنف من ERPNext.
+          </div>
+
+          <div v-for="(m, i) in draft.materials" :key="m.item_code || i"
+            class="grid grid-cols-12 px-4 py-3.5 items-center hover:bg-slate-50/50 transition-colors group"
             :class="i < draft.materials.length - 1 ? 'border-b border-border' : ''">
             <div class="col-span-4 flex items-center gap-2.5">
               <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" :class="m.wrap">
@@ -236,8 +290,12 @@ onUnmounted(() => clearInterval(timer))
                 class="w-20 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none"
                 :class="Number(m.actual) < Number(m.planned) ? 'border-warning/40 bg-amber-50 text-warning focus:border-warning' : 'border-primary/30 bg-primary-light text-primary focus:border-primary'" />
             </div>
-            <div class="col-span-2 text-center">
+            <div class="col-span-2 flex items-center justify-center gap-2">
               <span class="text-sm font-semibold text-text">{{ fmt(m.rate) }} ر.س</span>
+              <button @click="removeMaterial(i)" title="حذف المادة"
+                class="w-6 h-6 rounded-lg bg-slate-100 text-muted hover:bg-red-50 hover:text-danger flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                <i class="fa-solid fa-xmark text-xs"></i>
+              </button>
             </div>
           </div>
 

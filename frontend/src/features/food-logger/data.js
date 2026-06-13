@@ -47,13 +47,8 @@ export function createDraft() {
     producedQty: 480,
     weightPerPiece: 120,
     notes: "",
-    materials: [
-      { name_ar: "لحم بقري مفروم", name_en: "Beef Mince 80/20", unit: "كجم", planned: 50, actual: 48.5, rate: 45, icon: "fa-drumstick-bite", wrap: "bg-red-50", color: "text-red-400" },
-      { name_ar: "بيض طازج", name_en: "Fresh Eggs", unit: "حبة", planned: 120, actual: 120, rate: 0.75, icon: "fa-egg", wrap: "bg-amber-50", color: "text-amber-400" },
-      { name_ar: "بهارات وتوابل", name_en: "Spices & Seasoning", unit: "جم", planned: 500, actual: 480, rate: 0.12, icon: "fa-wheat-awn", wrap: "bg-yellow-50", color: "text-yellow-500" },
-      { name_ar: "زيت نباتي", name_en: "Vegetable Oil", unit: "لتر", planned: 5, actual: 5, rate: 8.5, icon: "fa-droplet", wrap: "bg-blue-50", color: "text-blue-400" },
-      { name_ar: "فتات الخبز", name_en: "Bread Crumbs", unit: "كجم", planned: 3, actual: 2.8, rate: 12, icon: "fa-bread-slice", wrap: "bg-orange-50", color: "text-orange-400" },
-    ],
+    // Materials are loaded from ERPNext Items (Raw Material group) at runtime.
+    materials: [],
     waste: [
       { reason: "برجر لحم محترق", qty: 12, unit: "قطعة", rate: 24 },
       { reason: "خبز منتهي الصلاحية", qty: 8, unit: "قطعة", rate: 24 },
@@ -101,4 +96,31 @@ export const fmt1 = (n) =>
 
 export function productByKey(key) {
   return products.find((p) => p.key === key) || products[0]
+}
+
+// Icon palette assigned to material rows by index (literal classes so Tailwind JIT picks them up).
+export const palette = [
+  { icon: "fa-drumstick-bite", wrap: "bg-red-50", color: "text-red-400" },
+  { icon: "fa-egg", wrap: "bg-amber-50", color: "text-amber-400" },
+  { icon: "fa-wheat-awn", wrap: "bg-yellow-50", color: "text-yellow-500" },
+  { icon: "fa-droplet", wrap: "bg-blue-50", color: "text-blue-400" },
+  { icon: "fa-bread-slice", wrap: "bg-orange-50", color: "text-orange-400" },
+  { icon: "fa-carrot", wrap: "bg-green-50", color: "text-green-500" },
+  { icon: "fa-box", wrap: "bg-slate-100", color: "text-slate-400" },
+]
+
+export const iconFor = (i) => palette[i % palette.length]
+
+// Build a material row from an ERPNext Item payload.
+export function materialFromItem(item, index) {
+  return {
+    item_code: item.item_code,
+    name_ar: item.name_ar,
+    name_en: item.name_en,
+    unit: item.unit,
+    rate: item.rate,
+    planned: 0,
+    actual: 0,
+    ...iconFor(index),
+  }
 }
