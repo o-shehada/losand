@@ -13,6 +13,18 @@ const localTranslations = {
     "Sign in": "دخول",
     Logout: "تسجيل الخروج",
     "Record production batches, materials, waste, loss, and final cost.": "سجّل دفعات الإنتاج والمواد والهالك والفاقد والتكلفة النهائية.",
+    "Raw Materials": "المواد الخام",
+    "Production Output": "ناتج الإنتاج",
+    "Notes": "ملاحظات",
+    "Continue": "متابعة",
+    "Production Summary": "ملخص الإنتاج",
+    "Quantity": "الكمية",
+    "Unit Cost": "تكلفة الوحدة",
+    "Total Cost": "التكلفة الإجمالية",
+    "I confirm this production batch is accurate.": "أؤكد أن بيانات دفعة الإنتاج صحيحة.",
+    "Save Batch": "حفظ الدفعة",
+    "Batch Saved": "تم حفظ الدفعة",
+    "Start New Batch": "بدء دفعة جديدة",
   },
 }
 
