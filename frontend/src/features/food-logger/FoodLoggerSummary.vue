@@ -3,6 +3,7 @@ import { computed, reactive, ref, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import { call } from "@/lib/api"
 import { session, signOut } from "@/stores/session"
+import { cur } from "@/lib/currency"
 import { createDraft, calc, fmt, fmt1, productByKey } from "./data"
 
 const router = useRouter()
@@ -151,12 +152,12 @@ onUnmounted(() => clearInterval(timer))
             <div class="px-4 py-4 text-center">
               <p class="text-xs text-muted mb-1 font-medium">تكلفة الوحدة</p>
               <p class="text-2xl font-black text-primary">{{ fmt(totals.unitCost) }}</p>
-              <p class="text-xs text-muted mt-0.5">ر.س / قطعة</p>
+              <p class="text-xs text-muted mt-0.5">{{ cur }} / قطعة</p>
             </div>
             <div class="px-4 py-4 text-center border-t md:border-t-0 border-border">
               <p class="text-xs text-muted mb-1 font-medium">التكلفة الإجمالية</p>
               <p class="text-2xl font-black text-text">{{ fmt(totals.totalCost) }}</p>
-              <p class="text-xs text-muted mt-0.5">ر.س</p>
+              <p class="text-xs text-muted mt-0.5">{{ cur }}</p>
             </div>
             <div class="px-4 py-4 text-center border-t md:border-t-0 border-border">
               <p class="text-xs text-muted mb-1 font-medium">نسبة الهالك</p>
@@ -182,7 +183,7 @@ onUnmounted(() => clearInterval(timer))
               </div>
             </div>
             <div class="flex items-center gap-3">
-              <span class="text-sm font-bold text-text bg-slate-100 px-3 py-1 rounded-lg">{{ fmt(totals.materialTotal) }} ر.س</span>
+              <span class="text-sm font-bold text-text bg-slate-100 px-3 py-1 rounded-lg">{{ fmt(totals.materialTotal) }} {{ cur }}</span>
               <i class="fa-solid fa-chevron-down text-muted transition-transform" :class="{ 'rotate-180': acc.materials }"></i>
             </div>
           </button>
@@ -205,11 +206,11 @@ onUnmounted(() => clearInterval(timer))
               </div>
               <div class="col-span-2 text-center text-sm font-semibold text-text">{{ m.actual }} {{ m.unit }}</div>
               <div class="col-span-2 text-center text-sm font-semibold text-muted">{{ fmt(m.rate) }}</div>
-              <div class="col-span-3 text-center text-sm font-bold text-text">{{ fmt(m.actual * m.rate) }} ر.س</div>
+              <div class="col-span-3 text-center text-sm font-bold text-text">{{ fmt(m.actual * m.rate) }} {{ cur }}</div>
             </div>
             <div class="bg-slate-50 px-5 py-3 flex items-center justify-between">
               <span class="text-sm font-bold text-text">إجمالي تكلفة المواد</span>
-              <span class="text-base font-black text-primary">{{ fmt(totals.materialTotal) }} ر.س</span>
+              <span class="text-base font-black text-primary">{{ fmt(totals.materialTotal) }} {{ cur }}</span>
             </div>
           </div>
         </div>
@@ -227,7 +228,7 @@ onUnmounted(() => clearInterval(timer))
               </div>
             </div>
             <div class="flex items-center gap-3">
-              <span class="text-sm font-bold text-danger bg-red-50 px-3 py-1 rounded-lg border border-red-100">{{ fmt(totals.wasteTotal) }} ر.س</span>
+              <span class="text-sm font-bold text-danger bg-red-50 px-3 py-1 rounded-lg border border-red-100">{{ fmt(totals.wasteTotal) }} {{ cur }}</span>
               <i class="fa-solid fa-chevron-down text-muted transition-transform" :class="{ 'rotate-180': acc.waste }"></i>
             </div>
           </button>
@@ -245,11 +246,11 @@ onUnmounted(() => clearInterval(timer))
               <div class="col-span-3 text-center">
                 <span class="bg-red-50 text-danger text-xs font-bold px-2 py-1 rounded-md">{{ w.qty }} {{ w.unit }}</span>
               </div>
-              <div class="col-span-3 text-center text-sm font-bold text-danger">{{ fmt(w.qty * w.rate) }} ر.س</div>
+              <div class="col-span-3 text-center text-sm font-bold text-danger">{{ fmt(w.qty * w.rate) }} {{ cur }}</div>
             </div>
             <div class="bg-red-50 px-5 py-3 flex items-center justify-between border-t border-red-100">
               <span class="text-sm font-bold text-danger">إجمالي الهالك</span>
-              <span class="text-base font-black text-danger">{{ fmt(totals.wasteTotal) }} ر.س</span>
+              <span class="text-base font-black text-danger">{{ fmt(totals.wasteTotal) }} {{ cur }}</span>
             </div>
           </div>
         </div>
@@ -267,7 +268,7 @@ onUnmounted(() => clearInterval(timer))
               </div>
             </div>
             <div class="flex items-center gap-3">
-              <span class="text-sm font-bold text-warning bg-amber-50 px-3 py-1 rounded-lg border border-amber-100">{{ fmt(totals.lossTotal) }} ر.س</span>
+              <span class="text-sm font-bold text-warning bg-amber-50 px-3 py-1 rounded-lg border border-amber-100">{{ fmt(totals.lossTotal) }} {{ cur }}</span>
               <i class="fa-solid fa-chevron-down text-muted transition-transform" :class="{ 'rotate-180': acc.loss }"></i>
             </div>
           </button>
@@ -285,11 +286,11 @@ onUnmounted(() => clearInterval(timer))
               <div class="col-span-3 text-center">
                 <span class="bg-amber-50 text-warning text-xs font-bold px-2 py-1 rounded-md">{{ l.qty }} {{ l.unit }}</span>
               </div>
-              <div class="col-span-3 text-center text-sm font-bold text-warning">{{ fmt(l.qty * l.rate) }} ر.س</div>
+              <div class="col-span-3 text-center text-sm font-bold text-warning">{{ fmt(l.qty * l.rate) }} {{ cur }}</div>
             </div>
             <div class="bg-amber-50 px-5 py-3 flex items-center justify-between border-t border-amber-100">
               <span class="text-sm font-bold text-warning">إجمالي الفاقد</span>
-              <span class="text-base font-black text-warning">{{ fmt(totals.lossTotal) }} ر.س</span>
+              <span class="text-base font-black text-warning">{{ fmt(totals.lossTotal) }} {{ cur }}</span>
             </div>
           </div>
         </div>
@@ -323,7 +324,7 @@ onUnmounted(() => clearInterval(timer))
                 <p class="text-xs text-muted">{{ draft.materials.length }} مواد</p>
               </div>
             </div>
-            <div class="col-span-3 text-center text-sm font-bold text-text">{{ fmt(totals.materialTotal) }} ر.س</div>
+            <div class="col-span-3 text-center text-sm font-bold text-text">{{ fmt(totals.materialTotal) }} {{ cur }}</div>
             <div class="col-span-2 text-center"><span class="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">{{ totals.matPct.toFixed(1) }}%</span></div>
             <div class="col-span-2 flex justify-center">
               <span class="bg-green-50 text-success text-xs font-bold px-2 py-1 rounded-lg border border-green-100"><i class="fa-solid fa-check text-xs ml-1"></i>طبيعي</span>
@@ -340,7 +341,7 @@ onUnmounted(() => clearInterval(timer))
                 <p class="text-xs text-danger">{{ totals.wasteUnits }} قطعة تالفة</p>
               </div>
             </div>
-            <div class="col-span-3 text-center text-sm font-bold text-danger">{{ fmt(totals.wasteTotal) }} ر.س</div>
+            <div class="col-span-3 text-center text-sm font-bold text-danger">{{ fmt(totals.wasteTotal) }} {{ cur }}</div>
             <div class="col-span-2 text-center"><span class="text-sm font-bold text-danger bg-red-50 px-2 py-0.5 rounded-md">{{ totals.wastePct.toFixed(1) }}%</span></div>
             <div class="col-span-2 flex justify-center">
               <span class="bg-red-50 text-danger text-xs font-bold px-2 py-1 rounded-lg border border-red-100"><i class="fa-solid fa-triangle-exclamation text-xs ml-1"></i>مرتفع</span>
@@ -357,7 +358,7 @@ onUnmounted(() => clearInterval(timer))
                 <p class="text-xs text-warning">{{ fmt1(totals.lossUnits) }} كجم فاقد</p>
               </div>
             </div>
-            <div class="col-span-3 text-center text-sm font-bold text-warning">{{ fmt(totals.lossTotal) }} ر.س</div>
+            <div class="col-span-3 text-center text-sm font-bold text-warning">{{ fmt(totals.lossTotal) }} {{ cur }}</div>
             <div class="col-span-2 text-center"><span class="text-sm font-bold text-warning bg-amber-50 px-2 py-0.5 rounded-md">{{ totals.lossPct.toFixed(1) }}%</span></div>
             <div class="col-span-2 flex justify-center">
               <span class="bg-amber-50 text-warning text-xs font-bold px-2 py-1 rounded-lg border border-amber-100"><i class="fa-solid fa-minus text-xs ml-1"></i>متوسط</span>
@@ -374,11 +375,11 @@ onUnmounted(() => clearInterval(timer))
                 <p class="text-xs text-primary/70">للدفعة كاملة</p>
               </div>
             </div>
-            <div class="col-span-3 text-center text-base font-black text-primary">{{ fmt(totals.totalCost) }} ر.س</div>
+            <div class="col-span-3 text-center text-base font-black text-primary">{{ fmt(totals.totalCost) }} {{ cur }}</div>
             <div class="col-span-2 text-center"><span class="text-sm font-bold text-primary">100%</span></div>
             <div class="col-span-2 flex justify-center">
               <div class="text-center">
-                <p class="text-xs text-primary font-bold">{{ fmt(totals.unitCost) }} ر.س</p>
+                <p class="text-xs text-primary font-bold">{{ fmt(totals.unitCost) }} {{ cur }}</p>
                 <p class="text-xs text-primary/70">/قطعة</p>
               </div>
             </div>
@@ -418,7 +419,7 @@ onUnmounted(() => clearInterval(timer))
           </div>
           <div class="flex items-center justify-between mt-3">
             <span class="text-xs text-muted">الإجمالي</span>
-            <span class="text-sm font-black text-primary">{{ fmt(totals.totalCost) }} ر.س</span>
+            <span class="text-sm font-black text-primary">{{ fmt(totals.totalCost) }} {{ cur }}</span>
           </div>
         </div>
       </section>
@@ -474,15 +475,15 @@ onUnmounted(() => clearInterval(timer))
           <div class="flex-1 grid grid-cols-3 gap-3">
             <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border">
               <p class="text-xs text-muted mb-0.5">تكلفة المواد</p>
-              <p class="text-sm font-bold text-text">{{ fmt(totals.materialTotal) }} ر.س</p>
+              <p class="text-sm font-bold text-text">{{ fmt(totals.materialTotal) }} {{ cur }}</p>
             </div>
             <div class="bg-red-50 rounded-xl px-3 py-2 text-center border border-red-100">
               <p class="text-xs text-danger mb-0.5">الهالك والفاقد</p>
-              <p class="text-sm font-bold text-danger">{{ fmt(totals.wasteLossTotal) }} ر.س</p>
+              <p class="text-sm font-bold text-danger">{{ fmt(totals.wasteLossTotal) }} {{ cur }}</p>
             </div>
             <div class="bg-primary-light rounded-xl px-3 py-2 text-center border border-primary/20">
               <p class="text-xs text-primary mb-0.5">التكلفة الإجمالية</p>
-              <p class="text-sm font-bold text-primary">{{ fmt(totals.totalCost) }} ر.س</p>
+              <p class="text-sm font-bold text-primary">{{ fmt(totals.totalCost) }} {{ cur }}</p>
             </div>
           </div>
         </div>

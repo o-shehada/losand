@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import { session, signOut } from "@/stores/session"
+import { cur } from "@/lib/currency"
 import { fmt, productByKey } from "./data"
 
 const router = useRouter()
@@ -142,12 +143,12 @@ onUnmounted(() => clearInterval(timer))
             <div class="px-4 py-4 text-center border-t md:border-t-0 border-border">
               <p class="text-xs text-muted mb-1 font-medium">التكلفة الإجمالية</p>
               <p class="text-xl font-black text-primary">{{ fmt(saved.totalCost) }}</p>
-              <p class="text-xs text-muted mt-0.5">ر.س</p>
+              <p class="text-xs text-muted mt-0.5">{{ cur }}</p>
             </div>
             <div class="px-4 py-4 text-center border-t md:border-t-0 border-border">
               <p class="text-xs text-muted mb-1 font-medium">تكلفة الوحدة</p>
               <p class="text-xl font-black text-text">{{ fmt(saved.unitCost) }}</p>
-              <p class="text-xs text-muted mt-0.5">ر.س / قطعة</p>
+              <p class="text-xs text-muted mt-0.5">{{ cur }} / قطعة</p>
             </div>
           </div>
         </div>

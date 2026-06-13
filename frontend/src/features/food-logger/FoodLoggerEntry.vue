@@ -3,6 +3,7 @@ import { reactive, computed, ref, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import { session, signOut } from "@/stores/session"
 import { call } from "@/lib/api"
+import { cur } from "@/lib/currency"
 import { createDraft, calc, fmt, fmt1, products, productByKey, materialFromItem } from "./data"
 
 const router = useRouter()
@@ -245,7 +246,7 @@ onUnmounted(() => clearInterval(timer))
                   <span class="block text-sm text-text font-semibold">{{ it.name_ar }}</span>
                   <span class="block text-xs text-muted">{{ it.item_code }}</span>
                 </span>
-                <span class="text-xs font-bold text-primary whitespace-nowrap">{{ fmt(it.rate) }} ر.س</span>
+                <span class="text-xs font-bold text-primary whitespace-nowrap">{{ fmt(it.rate) }} {{ cur }}</span>
               </button>
             </div>
           </div>
@@ -291,7 +292,7 @@ onUnmounted(() => clearInterval(timer))
                 :class="Number(m.actual) < Number(m.planned) ? 'border-warning/40 bg-amber-50 text-warning focus:border-warning' : 'border-primary/30 bg-primary-light text-primary focus:border-primary'" />
             </div>
             <div class="col-span-2 flex items-center justify-center gap-2">
-              <span class="text-sm font-semibold text-text">{{ fmt(m.rate) }} ر.س</span>
+              <span class="text-sm font-semibold text-text">{{ fmt(m.rate) }} {{ cur }}</span>
               <button @click="removeMaterial(i)" title="حذف المادة"
                 class="w-6 h-6 rounded-lg bg-slate-100 text-muted hover:bg-red-50 hover:text-danger flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                 <i class="fa-solid fa-xmark text-xs"></i>
@@ -304,7 +305,7 @@ onUnmounted(() => clearInterval(timer))
               <i class="fa-solid fa-circle-info text-muted text-sm"></i>
               <span class="text-xs text-muted">{{ draft.materials.length }} مواد خام - {{ completed }} قيم مكتملة</span>
             </div>
-            <span class="text-sm font-bold text-text">الإجمالي: <span class="text-primary">{{ fmt(totals.materialTotal) }} ر.س</span></span>
+            <span class="text-sm font-bold text-text">الإجمالي: <span class="text-primary">{{ fmt(totals.materialTotal) }} {{ cur }}</span></span>
           </div>
         </div>
       </section>
@@ -356,7 +357,7 @@ onUnmounted(() => clearInterval(timer))
             </div>
             <div class="bg-primary-light rounded-xl p-3 flex items-center justify-between border border-primary/20">
               <span class="text-xs text-primary font-semibold">التكلفة / قطعة</span>
-              <span class="text-sm font-bold text-primary">{{ fmt(totals.unitCost) }} ر.س</span>
+              <span class="text-sm font-bold text-primary">{{ fmt(totals.unitCost) }} {{ cur }}</span>
             </div>
           </div>
         </div>
@@ -405,7 +406,7 @@ onUnmounted(() => clearInterval(timer))
               </button>
               <div class="bg-red-50 rounded-xl p-3 flex items-center justify-between border border-red-100">
                 <span class="text-xs text-danger font-semibold">إجمالي الهالك</span>
-                <span class="text-base font-bold text-danger">{{ totals.wasteUnits }} قطعة / {{ fmt(totals.wasteTotal) }} ر.س</span>
+                <span class="text-base font-bold text-danger">{{ totals.wasteUnits }} قطعة / {{ fmt(totals.wasteTotal) }} {{ cur }}</span>
               </div>
             </div>
           </div>
@@ -442,7 +443,7 @@ onUnmounted(() => clearInterval(timer))
               </button>
               <div class="bg-amber-50 rounded-xl p-3 flex items-center justify-between border border-amber-100">
                 <span class="text-xs text-warning font-semibold">إجمالي الفاقد</span>
-                <span class="text-base font-bold text-warning">{{ fmt1(totals.lossUnits) }} كجم / {{ fmt(totals.lossTotal) }} ر.س</span>
+                <span class="text-base font-bold text-warning">{{ fmt1(totals.lossUnits) }} كجم / {{ fmt(totals.lossTotal) }} {{ cur }}</span>
               </div>
             </div>
           </div>
@@ -467,15 +468,15 @@ onUnmounted(() => clearInterval(timer))
           <div class="flex-1 grid grid-cols-3 gap-3">
             <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border">
               <p class="text-xs text-muted mb-0.5">تكلفة المواد</p>
-              <p class="text-sm font-bold text-text">{{ fmt(totals.materialTotal) }} ر.س</p>
+              <p class="text-sm font-bold text-text">{{ fmt(totals.materialTotal) }} {{ cur }}</p>
             </div>
             <div class="bg-red-50 rounded-xl px-3 py-2 text-center border border-red-100">
               <p class="text-xs text-danger mb-0.5">الهالك والفاقد</p>
-              <p class="text-sm font-bold text-danger">{{ fmt(totals.wasteLossTotal) }} ر.س</p>
+              <p class="text-sm font-bold text-danger">{{ fmt(totals.wasteLossTotal) }} {{ cur }}</p>
             </div>
             <div class="bg-primary-light rounded-xl px-3 py-2 text-center border border-primary/20">
               <p class="text-xs text-primary mb-0.5">التكلفة الإجمالية</p>
-              <p class="text-sm font-bold text-primary">{{ fmt(totals.totalCost) }} ر.س</p>
+              <p class="text-sm font-bold text-primary">{{ fmt(totals.totalCost) }} {{ cur }}</p>
             </div>
           </div>
         </div>
