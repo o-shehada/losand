@@ -9,7 +9,7 @@ export default defineConfig({
     frappeui({
       frappeProxy: true,
       lucideIcons: true,
-      jinjaBootData: true,
+      jinjaBootData: false,
       buildConfig: {
         indexHtmlPath: "../losand/www/los-andalus/manufacture.html",
         sourcemap: false,

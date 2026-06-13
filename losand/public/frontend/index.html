@@ -14,12 +14,5 @@
       window.site_name = {{ site_name | tojson }};
       window.boot = {{ boot | tojson }};
     </script>
-  
-          <script>
-              {% for key in boot %}
-              window["{{ key }}"] = {{ boot[key] | tojson }};
-              {% endfor %}
-          </script>
-          </body>
-          
+  </body>
 </html>
