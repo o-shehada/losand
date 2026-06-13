@@ -12,6 +12,7 @@ export default defineConfig({
       jinjaBootData: true,
       buildConfig: {
         indexHtmlPath: "../losand/www/los-andalus/manufacture.html",
+        sourcemap: false,
       },
     }),
     vue(),
@@ -33,7 +34,7 @@ export default defineConfig({
     outDir: "../losand/public/frontend",
     emptyOutDir: true,
     target: "es2018",
-    sourcemap: true,
+    sourcemap: false,
     commonjsOptions: {
       include: [/tailwind.config.js/, /node_modules/],
     },
