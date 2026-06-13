@@ -1,5 +1,3 @@
-import json
-
 import frappe
 
 
@@ -12,4 +10,3 @@ def get_context(context):
 		"user": frappe.session.user,
 		"lang": context.lang,
 	}
-	context.boot_json = json.dumps(context.boot)

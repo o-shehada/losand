@@ -10,9 +10,9 @@
   <body>
     <div id="app"></div>
     <script>
-      window.csrf_token = "{{ csrf_token }}"
-      window.site_name = "{{ site_name }}"
-      window.boot = {{ boot_json }}
+      window.csrf_token = {{ csrf_token | tojson }};
+      window.site_name = {{ site_name | tojson }};
+      window.boot = {{ boot | tojson }};
     </script>
   
           <script>
