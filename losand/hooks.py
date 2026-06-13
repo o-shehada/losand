@@ -64,6 +64,13 @@ app_license = "mit"
 # 	"Role": "home_page"
 # }
 
+# Website Route Rules
+# -------------------
+
+website_route_rules = [
+	{"from_route": "/los-andalus/manufacture/<path:app_path>", "to_route": "los-andalus/manufacture"},
+]
+
 # Generators
 # ----------
 
@@ -246,4 +253,3 @@ app_license = "mit"
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-

@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ _("Los Andalus Manufacture") }}</title>
+    <script type="module" crossorigin src="/assets/losand/frontend/assets/index-umNbFB-e.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/losand/frontend/assets/index-CosQH01O.css">
   </head>
   <body>
     <div id="app"></div>
@@ -12,6 +14,12 @@
       window.site_name = "{{ site_name }}"
       window.boot = {{ boot_json }}
     </script>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+  
+          <script>
+              {% for key in boot %}
+              window["{{ key }}"] = {{ boot[key] | tojson }};
+              {% endfor %}
+          </script>
+          </body>
+          
 </html>
