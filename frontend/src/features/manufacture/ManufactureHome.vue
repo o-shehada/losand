@@ -4,6 +4,7 @@ import { ClipboardList, LogOut } from "lucide-vue-next"
 import { t } from "@/lib/i18n"
 import { session, signOut } from "@/stores/session"
 
+const logoUrl = "/assets/losand/images/losand-logo.jpg"
 const router = useRouter()
 
 async function logout() {
@@ -15,9 +16,12 @@ async function logout() {
 <template>
   <section class="mx-auto min-h-screen max-w-5xl px-5 py-6">
     <header class="mb-8 flex items-center justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-extrabold">{{ t("Manufacture Home") }}</h1>
-        <p class="mt-1 text-sm text-manufacture-muted">{{ session.user }}</p>
+      <div class="flex items-center gap-3">
+        <img :src="logoUrl" alt="Los Andalos" class="h-12 w-12 rounded-xl bg-white object-contain ring-1 ring-manufacture-line" />
+        <div>
+          <h1 class="text-3xl font-extrabold">{{ t("Manufacture Home") }}</h1>
+          <p class="mt-1 text-sm text-manufacture-muted">{{ session.user }}</p>
+        </div>
       </div>
       <button class="flex items-center gap-2 rounded-xl border border-manufacture-line bg-white px-4 py-2 text-sm font-semibold" @click="logout">
         <LogOut class="h-4 w-4" />

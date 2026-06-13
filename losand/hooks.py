@@ -5,6 +5,11 @@ app_description = "Los Andalus ERP App"
 app_email = "o.shehada@ard.ly"
 app_license = "mit"
 
+# Branding
+# ------------------
+# App logo shown in the Desk navbar and on the login page
+app_logo_url = "/assets/losand/images/losand-logo.jpg"
+
 # Apps
 # ------------------
 
