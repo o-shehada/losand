@@ -240,11 +240,89 @@ def _ensure_app_settings():
 		s.save(ignore_permissions=True)
 
 
+BATCH_DT = "Los Andalus Production Batch"
+
+
+def _ensure_number_cards():
+	# Number Card is named by its label, so labels carry the "LA " prefix used by the workspace.
+	cards = [
+		{
+			"label": "LA Batches Today",
+			"type": "Document Type",
+			"document_type": BATCH_DT,
+			"function": "Count",
+			"filters_json": frappe.as_json([[BATCH_DT, "creation", "Timespan", "today"]]),
+		},
+		{
+			"label": "LA Total Produced",
+			"type": "Document Type",
+			"document_type": BATCH_DT,
+			"function": "Sum",
+			"aggregate_function_based_on": "produced_qty",
+			"filters_json": frappe.as_json([[BATCH_DT, "status", "=", "Completed"]]),
+		},
+		{
+			"label": "LA Production Cost",
+			"type": "Document Type",
+			"document_type": BATCH_DT,
+			"function": "Sum",
+			"aggregate_function_based_on": "total_cost",
+			"filters_json": frappe.as_json([[BATCH_DT, "status", "=", "Completed"]]),
+		},
+		{
+			"label": "LA FG Stock Value",
+			"type": "Document Type",
+			"document_type": "Bin",
+			"function": "Sum",
+			"aggregate_function_based_on": "stock_value",
+			"filters_json": frappe.as_json([["Bin", "warehouse", "=", "Finished Goods - LA"]]),
+		},
+	]
+	for c in cards:
+		if frappe.db.exists("Number Card", c["label"]):
+			continue
+		doc = frappe.get_doc(dict(c, doctype="Number Card", is_public=1))
+		doc.insert(ignore_permissions=True)
+
+
+def _ensure_charts():
+	charts = [
+		{
+			"chart_name": "LA Daily Production",
+			"chart_type": "Sum",
+			"document_type": BATCH_DT,
+			"based_on": "creation",
+			"value_based_on": "produced_qty",
+			"timeseries": 1,
+			"time_interval": "Daily",
+			"timespan": "Last Month",
+			"type": "Bar",
+			"filters_json": "[]",
+		},
+		{
+			"chart_name": "LA Batches by Status",
+			"chart_type": "Group By",
+			"document_type": BATCH_DT,
+			"group_by_type": "Count",
+			"group_by_based_on": "status",
+			"type": "Donut",
+			"filters_json": "[]",
+		},
+	]
+	for c in charts:
+		if frappe.db.exists("Dashboard Chart", c["chart_name"]):
+			continue
+		doc = frappe.get_doc(dict(c, doctype="Dashboard Chart", is_public=1))
+		doc.insert(ignore_permissions=True)
+
+
 def run():
 	_ensure_manufacturing_settings()
 	_ensure_roles()
 	_ensure_link_back_fields()
 	_ensure_app_settings()
+	_ensure_number_cards()
+	_ensure_charts()
 	_ensure_uoms()
 	_ensure_raw_materials()
 	_ensure_weight_attribute()

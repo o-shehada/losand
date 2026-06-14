@@ -1,6 +1,9 @@
 {
- "charts": [],
- "content": "[{\"id\":\"h1\",\"type\":\"header\",\"data\":{\"text\":\"Los Andalus Manufacture\",\"col\":12}},{\"id\":\"s1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Batches\",\"col\":3}},{\"id\":\"s2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Work Orders\",\"col\":3}},{\"id\":\"s3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Items\",\"col\":3}},{\"id\":\"s4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Balance\",\"col\":3}},{\"id\":\"sp\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Production\",\"col\":4}},{\"id\":\"c2\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"c3\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}},{\"id\":\"c4\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "charts": [
+  {"chart_name": "LA Daily Production", "label": "Daily Production"},
+  {"chart_name": "LA Batches by Status", "label": "Batches by Status"}
+ ],
+ "content": "[{\"id\":\"h1\",\"type\":\"header\",\"data\":{\"text\":\"Los Andalus Manufacture\",\"col\":12}},{\"id\":\"n1\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA Batches Today\",\"col\":3}},{\"id\":\"n2\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA Total Produced\",\"col\":3}},{\"id\":\"n3\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA Production Cost\",\"col\":3}},{\"id\":\"n4\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA FG Stock Value\",\"col\":3}},{\"id\":\"ch1\",\"type\":\"chart\",\"data\":{\"chart_name\":\"LA Daily Production\",\"col\":8}},{\"id\":\"ch2\",\"type\":\"chart\",\"data\":{\"chart_name\":\"LA Batches by Status\",\"col\":4}},{\"id\":\"sp\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"s1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Batches\",\"col\":3}},{\"id\":\"s2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Work Orders\",\"col\":3}},{\"id\":\"s3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Items\",\"col\":3}},{\"id\":\"s4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Balance\",\"col\":3}},{\"id\":\"sp2\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Production\",\"col\":4}},{\"id\":\"c2\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"c3\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}},{\"id\":\"c4\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
  "creation": "2026-06-13 00:00:00",
  "custom_blocks": [],
  "docstatus": 0,
@@ -32,10 +35,15 @@
   {"hidden": 0, "is_query_report": 1, "label": "Work Order Summary", "link_count": 0, "link_to": "Work Order Summary", "link_type": "Report", "onboard": 0, "type": "Link"},
   {"hidden": 0, "is_query_report": 1, "label": "Production Analytics", "link_count": 0, "link_to": "Production Analytics", "link_type": "Report", "onboard": 0, "type": "Link"}
  ],
- "modified": "2026-06-13 00:00:00",
+ "modified": "2026-06-14 06:30:00",
  "module": "Los Andalus App",
  "name": "Los Andalus",
- "number_cards": [],
+ "number_cards": [
+  {"number_card_name": "LA Batches Today", "label": "Batches Today"},
+  {"number_card_name": "LA Total Produced", "label": "Total Produced (pcs)"},
+  {"number_card_name": "LA Production Cost", "label": "Production Cost (Completed)"},
+  {"number_card_name": "LA FG Stock Value", "label": "FG Stock Value"}
+ ],
  "owner": "Administrator",
  "parent_page": "",
  "public": 1,
