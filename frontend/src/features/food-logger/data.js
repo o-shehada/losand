@@ -3,9 +3,11 @@
 // (images/icons keyed by template code) and pure helpers.
 // Class-name literals are written in full so Tailwind's JIT scanner picks them up.
 
+const IMG_BASE = "/assets/losand/images/products"
+
 export const PRODUCT_PRESENTATION = {
   "Beef Burger": {
-    img: "https://storage.googleapis.com/uxpilot-auth.appspot.com/8de04f0132-a4d26b9fac68d3f1dc4c.png",
+    img: `${IMG_BASE}/beef-burger.svg`,
     icon: "fa-burger",
     headBg: "bg-red-50",
     headBorder: "border-red-100",
@@ -13,7 +15,7 @@ export const PRODUCT_PRESENTATION = {
     iconText: "text-red-500",
   },
   "Chicken Burger": {
-    img: "https://storage.googleapis.com/uxpilot-auth.appspot.com/03643144d9-907fefba5c1e40b19cf8.png",
+    img: `${IMG_BASE}/chicken-burger.svg`,
     icon: "fa-drumstick-bite",
     headBg: "bg-amber-50",
     headBorder: "border-amber-100",
@@ -21,7 +23,7 @@ export const PRODUCT_PRESENTATION = {
     iconText: "text-amber-500",
   },
   "Burger Buns": {
-    img: "https://storage.googleapis.com/uxpilot-auth.appspot.com/516077dbb6-fcb5658aad228244c8f3.png",
+    img: `${IMG_BASE}/burger-buns.svg`,
     icon: "fa-bread-slice",
     headBg: "bg-orange-50",
     headBorder: "border-orange-100",
@@ -31,7 +33,7 @@ export const PRODUCT_PRESENTATION = {
 }
 
 const FALLBACK_PRESENTATION = {
-  img: null,
+  img: `${IMG_BASE}/default.svg`,
   icon: "fa-burger",
   headBg: "bg-slate-50",
   headBorder: "border-slate-100",
@@ -41,6 +43,11 @@ const FALLBACK_PRESENTATION = {
 
 export function presentationFor(code) {
   return PRODUCT_PRESENTATION[code] || FALLBACK_PRESENTATION
+}
+
+// ERPNext Item image first, then the local predefined image for the product.
+export function productImage(product) {
+  return (product && product.image) || presentationFor(product && product.code).img
 }
 
 function todayLabel() {

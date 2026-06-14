@@ -4,7 +4,7 @@ import { useRouter } from "vue-router"
 import { session, signOut } from "@/stores/session"
 import { call } from "@/lib/api"
 import { cur, factoryName } from "@/lib/currency"
-import { createDraft, calc, fmt, fmt1, presentationFor, materialFromBom, materialFromItem } from "./data"
+import { createDraft, calc, fmt, fmt1, presentationFor, productImage, materialFromBom, materialFromItem } from "./data"
 
 const router = useRouter()
 
@@ -288,8 +288,7 @@ onUnmounted(() => clearInterval(timer))
               <i class="fa-solid fa-check text-white text-xs"></i>
             </div>
             <div class="w-16 h-16 overflow-hidden rounded-xl flex items-center justify-center" :class="presentationFor(p.code).iconBg">
-              <img v-if="presentationFor(p.code).img" class="w-full h-full object-cover" :src="presentationFor(p.code).img" :alt="p.name_ar" />
-              <i v-else class="fa-solid text-2xl" :class="[presentationFor(p.code).icon, presentationFor(p.code).iconText]"></i>
+              <img class="w-full h-full object-cover" :src="productImage(p)" :alt="p.name_ar" />
             </div>
             <div class="text-center">
               <p class="font-bold text-text text-sm">{{ p.name_ar }}</p>

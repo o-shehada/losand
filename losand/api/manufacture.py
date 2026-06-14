@@ -136,7 +136,7 @@ def get_allowed_products():
 		variants = frappe.get_all(
 			"Item",
 			filters={"variant_of": t.item_code, "disabled": 0},
-			fields=["item_code", "weight_per_unit", "custom_is_default_variant"],
+			fields=["item_code", "weight_per_unit", "custom_is_default_variant", "image"],
 			order_by="weight_per_unit asc",
 		)
 		if not variants:
@@ -147,7 +147,7 @@ def get_allowed_products():
 				"code": t.item_code,
 				"name_ar": t.item_name,
 				"name_en": t.item_code,
-				"image": t.image,
+				"image": t.image or default.get("image"),
 				"default_variant": default.item_code,
 				"default_weight": default.weight_per_unit,
 				"variants": [
