@@ -5,11 +5,28 @@ from datetime import datetime
 import frappe
 from frappe import _
 
-COMPANY = "Los Andalus"
-SOURCE_WAREHOUSE = "Stores - LA"
-WIP_WAREHOUSE = "Work In Progress - LA"
-FG_WAREHOUSE = "Finished Goods - LA"
-RAW_MATERIAL_GROUP = "Raw Material"
+# Defaults used only as fallbacks when the Settings single is empty.
+DEFAULT_COMPANY = "Los Andalus"
+DEFAULT_SOURCE_WAREHOUSE = "Stores - LA"
+DEFAULT_WIP_WAREHOUSE = "Work In Progress - LA"
+DEFAULT_FG_WAREHOUSE = "Finished Goods - LA"
+DEFAULT_RAW_MATERIAL_GROUP = "Raw Material"
+DEFAULT_FACTORY_NAME = "مصنع الغذاء الحديث"
+
+
+def cfg():
+	"""Resolved manufacturing config from the Settings single, with safe fallbacks."""
+	s = frappe.get_cached_doc("Los Andalus Manufacture Settings")
+	company = s.company or frappe.defaults.get_global_default("company") or DEFAULT_COMPANY
+	return frappe._dict(
+		company=company,
+		source=s.source_warehouse or DEFAULT_SOURCE_WAREHOUSE,
+		wip=s.wip_warehouse or DEFAULT_WIP_WAREHOUSE,
+		fg=s.fg_warehouse or DEFAULT_FG_WAREHOUSE,
+		raw_group=s.raw_material_group or DEFAULT_RAW_MATERIAL_GROUP,
+		factory_name=s.factory_name or DEFAULT_FACTORY_NAME,
+	)
+
 
 # Roles allowed to POST production (create stock). Operators below may only draft/enter.
 PRODUCE_ROLES = {"System Manager", "Manufacturing Manager", "Manufacture Supervisor"}
@@ -58,9 +75,10 @@ def get_raw_materials(search: str | None = None):
 
 	from frappe.utils.nestedset import get_descendants_of
 
-	groups = [RAW_MATERIAL_GROUP]
+	rm_group = cfg().raw_group
+	groups = [rm_group]
 	try:
-		groups += get_descendants_of("Item Group", RAW_MATERIAL_GROUP)
+		groups += get_descendants_of("Item Group", rm_group)
 	except Exception:
 		pass
 
@@ -106,7 +124,8 @@ def get_raw_materials(search: str | None = None):
 	return result
 
 
-def _stock_map(codes, warehouse=SOURCE_WAREHOUSE):
+def _stock_map(codes, warehouse=None):
+	warehouse = warehouse or cfg().source
 	qty_map = {}
 	if codes:
 		for b in frappe.get_all(
@@ -237,12 +256,14 @@ def submit_batch(draft, totals=None):
 	if not bom_no:
 		frappe.throw(_("No active BOM found for {0}").format(variant))
 
+	c = cfg()
+
 	# Stock guard (defence in depth; UI also blocks this)
 	for m in materials:
 		actual = float(m.get("actual") or 0)
 		if actual <= 0:
 			continue
-		on_hand = frappe.db.get_value("Bin", {"item_code": m.get("item_code"), "warehouse": SOURCE_WAREHOUSE}, "actual_qty") or 0
+		on_hand = frappe.db.get_value("Bin", {"item_code": m.get("item_code"), "warehouse": c.source}, "actual_qty") or 0
 		if actual > on_hand:
 			frappe.throw(
 				_("Not enough stock of {0}: need {1}, available {2}").format(m.get("name_ar") or m.get("item_code"), actual, on_hand)
@@ -258,9 +279,9 @@ def submit_batch(draft, totals=None):
 			"batch_reference": draft.get("batchRef"),
 			"produced_qty": qty,
 			"weight": draft.get("weight") or 0,
-			"source_warehouse": SOURCE_WAREHOUSE,
-			"wip_warehouse": WIP_WAREHOUSE,
-			"target_warehouse": FG_WAREHOUSE,
+			"source_warehouse": c.source,
+			"wip_warehouse": c.wip,
+			"target_warehouse": c.fg,
 			"operator": frappe.session.user,
 			"status": "Draft",
 			"materials_json": json.dumps(materials, ensure_ascii=False),
@@ -279,10 +300,10 @@ def submit_batch(draft, totals=None):
 				"production_item": variant,
 				"bom_no": bom_no,
 				"qty": qty,
-				"company": COMPANY,
-				"source_warehouse": SOURCE_WAREHOUSE,
-				"wip_warehouse": WIP_WAREHOUSE,
-				"fg_warehouse": FG_WAREHOUSE,
+				"company": c.company,
+				"source_warehouse": c.source,
+				"wip_warehouse": c.wip,
+				"fg_warehouse": c.fg,
 			}
 		)
 		wo.insert(ignore_permissions=True)
@@ -304,7 +325,7 @@ def submit_batch(draft, totals=None):
 		bom_codes = {it.item_code for it in transfer.items}
 		for code, a in actual_map.items():
 			if a > 0 and code not in bom_codes:
-				transfer.append("items", {"item_code": code, "qty": a, "s_warehouse": SOURCE_WAREHOUSE, "t_warehouse": WIP_WAREHOUSE})
+				transfer.append("items", {"item_code": code, "qty": a, "s_warehouse": c.source, "t_warehouse": c.wip})
 		transfer.insert(ignore_permissions=True)
 		transfer.submit()
 		batch.db_set("material_transfer_entry", transfer.name)
@@ -334,9 +355,9 @@ def submit_batch(draft, totals=None):
 		if waste_qty > 0:
 			issue = frappe.new_doc("Stock Entry")
 			issue.stock_entry_type = "Material Issue"
-			issue.company = COMPANY
-			issue.from_warehouse = FG_WAREHOUSE
-			issue.append("items", {"item_code": variant, "qty": waste_qty, "s_warehouse": FG_WAREHOUSE})
+			issue.company = c.company
+			issue.from_warehouse = c.fg
+			issue.append("items", {"item_code": variant, "qty": waste_qty, "s_warehouse": c.fg})
 			issue.insert(ignore_permissions=True)
 			issue.submit()
 			batch.db_set("waste_entry", issue.name)

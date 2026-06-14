@@ -43,10 +43,25 @@ export function presentationFor(code) {
   return PRODUCT_PRESENTATION[code] || FALLBACK_PRESENTATION
 }
 
+function todayLabel() {
+  try {
+    return new Intl.DateTimeFormat("ar", { weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date())
+  } catch (e) {
+    return new Date().toLocaleDateString()
+  }
+}
+
+function genBatchRef() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, "0")
+  const rand = Math.floor(1000 + Math.random() * 9000)
+  return `#B-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${rand}`
+}
+
 export function createDraft() {
   return {
-    batchRef: "#B-2024-0847",
-    dateLabel: "الجمعة، 6 يونيو 2025",
+    batchRef: genBatchRef(),
+    dateLabel: todayLabel(),
     shift: "morning",
     product: "", // template item_code, set after products load
     productName: "",

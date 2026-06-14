@@ -3,7 +3,7 @@ import { reactive, computed, ref, watch, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import { session, signOut } from "@/stores/session"
 import { call } from "@/lib/api"
-import { cur } from "@/lib/currency"
+import { cur, factoryName } from "@/lib/currency"
 import { createDraft, calc, fmt, fmt1, presentationFor, materialFromBom, materialFromItem } from "./data"
 
 const router = useRouter()
@@ -168,7 +168,7 @@ onUnmounted(() => clearInterval(timer))
           </div>
           <div>
             <p class="text-white/70 text-xs font-medium">نظام إدارة الإنتاج</p>
-            <p class="text-white font-bold text-sm">مصنع الغذاء الحديث</p>
+            <p class="text-white font-bold text-sm">{{ factoryName }}</p>
           </div>
         </div>
         <div class="flex items-center gap-4">

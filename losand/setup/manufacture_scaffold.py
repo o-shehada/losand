@@ -201,9 +201,29 @@ def _ensure_roles():
 			)
 
 
+def _ensure_app_settings():
+	s = frappe.get_single("Los Andalus Manufacture Settings")
+	defaults = {
+		"company": COMPANY,
+		"factory_name": "مصنع الغذاء الحديث",
+		"raw_material_group": RM_GROUP,
+		"source_warehouse": "Stores - LA",
+		"wip_warehouse": "Work In Progress - LA",
+		"fg_warehouse": "Finished Goods - LA",
+	}
+	changed = False
+	for field, value in defaults.items():
+		if not s.get(field):
+			s.set(field, value)
+			changed = True
+	if changed:
+		s.save(ignore_permissions=True)
+
+
 def run():
 	_ensure_manufacturing_settings()
 	_ensure_roles()
+	_ensure_app_settings()
 	_ensure_uoms()
 	_ensure_raw_materials()
 	_ensure_weight_attribute()
