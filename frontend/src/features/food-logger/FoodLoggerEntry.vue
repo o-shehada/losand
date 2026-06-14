@@ -20,6 +20,12 @@ const totals = computed(() => calc(draft))
 const selectedProduct = computed(() => productByKey(draft.product))
 const completed = computed(() => draft.materials.filter((m) => Number(m.actual) > 0).length)
 
+// Stock awareness: a material is "over" when its actual consumption exceeds available stock
+const stockIssues = computed(() =>
+  draft.materials.filter((m) => Number(m.actual) > Number(m.available || 0))
+)
+const canContinue = computed(() => Number(draft.producedQty) > 0 && stockIssues.value.length === 0)
+
 // Raw materials sourced from ERPNext Items (Raw Material group)
 const availableMaterials = ref([])
 const materialsLoading = ref(true)
@@ -56,6 +62,7 @@ function removeLoss(i) {
 }
 
 function continueToSummary() {
+  if (!canContinue.value) return
   sessionStorage.setItem("foodLoggerDraft", JSON.stringify(draft))
   router.push("/food-logger/summary")
 }
@@ -278,6 +285,9 @@ onUnmounted(() => clearInterval(timer))
               <div>
                 <p class="text-sm font-semibold text-text">{{ m.name_ar }}</p>
                 <p class="text-xs text-muted">{{ m.name_en }}</p>
+                <p class="text-[11px] font-bold mt-0.5" :class="Number(m.actual) > Number(m.available || 0) || Number(m.available || 0) <= 0 ? 'text-danger' : 'text-success'">
+                  <i class="fa-solid fa-warehouse text-[10px] ml-1"></i>المتاح: {{ fmt1(m.available || 0) }} {{ m.unit }}
+                </p>
               </div>
             </div>
             <div class="col-span-2 text-center">
@@ -289,7 +299,7 @@ onUnmounted(() => clearInterval(timer))
             <div class="col-span-2 flex justify-center">
               <input type="number" v-model.number="m.actual"
                 class="w-20 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none"
-                :class="Number(m.actual) < Number(m.planned) ? 'border-warning/40 bg-amber-50 text-warning focus:border-warning' : 'border-primary/30 bg-primary-light text-primary focus:border-primary'" />
+                :class="Number(m.actual) > Number(m.available || 0) ? 'border-danger/60 bg-red-50 text-danger focus:border-danger' : (Number(m.actual) < Number(m.planned) ? 'border-warning/40 bg-amber-50 text-warning focus:border-warning' : 'border-primary/30 bg-primary-light text-primary focus:border-primary')" />
             </div>
             <div class="col-span-2 flex items-center justify-center gap-2">
               <span class="text-sm font-semibold text-text">{{ fmt(m.rate) }} {{ cur }}</span>
@@ -480,12 +490,17 @@ onUnmounted(() => clearInterval(timer))
             </div>
           </div>
         </div>
+        <div v-if="!canContinue" class="mb-2 flex items-center gap-2 text-xs font-bold text-danger bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span v-if="stockIssues.length">كمية تتجاوز المتاح في المخزون: {{ stockIssues.map((m) => m.name_ar).join("، ") }}</span>
+          <span v-else>أدخل كمية إنتاج أكبر من صفر للمتابعة</span>
+        </div>
         <div class="flex items-center gap-3">
           <button class="flex items-center gap-2 px-5 py-3 bg-slate-100 text-muted rounded-xl text-sm font-semibold border border-border hover:bg-slate-200 transition-colors min-h-[44px]">
             <i class="fa-regular fa-floppy-disk text-sm"></i>
             حفظ مسودة
           </button>
-          <button @click="continueToSummary" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors min-h-[44px] shadow-md shadow-primary/30">
+          <button @click="continueToSummary" :disabled="!canContinue" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors min-h-[44px] shadow-md shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary">
             <i class="fa-solid fa-calculator text-base"></i>
             احسب التكلفة وراجع الملخص
             <i class="fa-solid fa-arrow-left text-sm"></i>

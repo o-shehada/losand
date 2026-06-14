@@ -119,6 +119,7 @@ export function materialFromItem(item, index) {
     name_en: item.name_en,
     unit: item.unit,
     rate: item.rate,
+    available: item.available_qty ?? 0,
     planned: 0,
     actual: 0,
     ...iconFor(index),

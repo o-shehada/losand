@@ -30,14 +30,14 @@ async function submit() {
         <div class="mb-8 flex items-center gap-4">
           <img :src="logoUrl" alt="Los Andalos" class="h-16 w-16 rounded-2xl bg-[#16120f] object-contain p-1.5 shadow-sm ring-1 ring-[#eaded6]" />
           <div>
-            <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-[#e8490f]">{{ t("Manufacture") }}</p>
-            <h1 class="mt-1 text-2xl font-extrabold leading-tight text-[#211b16]">{{ t("Los Andalus Manufacture") }}</h1>
+            <p class="text-xs font-extrabold uppercase tracking-[0.22em] text-[#e8490f]">{{ t("Los Andalus") }}</p>
+            <h1 class="mt-1 text-2xl font-extrabold leading-tight text-[#211b16]">{{ t("Operations Portal") }}</h1>
           </div>
         </div>
 
         <div class="mb-7">
           <h2 class="text-3xl font-extrabold leading-tight text-[#211b16]">{{ t("Welcome back") }}</h2>
-          <p class="mt-2 text-sm leading-6 text-[#7a6558]">{{ t("Secure manufacturing workspace") }}</p>
+          <p class="mt-2 text-sm leading-6 text-[#7a6558]">{{ t("Sign in to continue") }}</p>
         </div>
 
         <label class="mb-4 block">
@@ -57,9 +57,9 @@ async function submit() {
         <p v-if="session.loading" class="relative z-20 mt-3 text-center text-xs font-bold text-[#e8490f]">{{ t("Checking credentials") }}</p>
 
         <div class="mt-6 grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-[#7a6558]">
-          <div class="rounded-xl bg-[#f7eee7] px-2 py-2">{{ t("Batch") }}</div>
-          <div class="rounded-xl bg-[#f7eee7] px-2 py-2">{{ t("Cost") }}</div>
-          <div class="rounded-xl bg-[#f7eee7] px-2 py-2">{{ t("Quality") }}</div>
+          <div class="rounded-xl bg-[#f7eee7] px-2 py-2">{{ t("POS") }}</div>
+          <div class="rounded-xl bg-[#f7eee7] px-2 py-2">{{ t("Production") }}</div>
+          <div class="rounded-xl bg-[#f7eee7] px-2 py-2">{{ t("Reports") }}</div>
         </div>
       </form>
     </div>
@@ -70,12 +70,12 @@ async function submit() {
       <div class="relative flex h-full flex-col justify-between rounded-[28px] border border-white/15 bg-black/25 p-8 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-[2px]">
         <div class="flex items-center justify-between">
           <img :src="logoUrl" alt="Los Andalos" class="h-20 w-20 rounded-2xl bg-[#16120f] p-2 object-contain ring-1 ring-white/20" />
-          <span class="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.18em]">{{ t("Food Logger") }}</span>
+          <span class="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.18em]">{{ t("Secure Access") }}</span>
         </div>
         <div class="max-w-xl">
-          <p class="text-sm font-extrabold uppercase tracking-[0.22em] text-[#ffb089]">{{ t("Production control") }}</p>
-          <h2 class="mt-4 text-5xl font-black leading-[1.05]">{{ t("Manufacture Home") }}</h2>
-          <p class="mt-5 max-w-md text-base leading-8 text-white/78">{{ t("Track batches, materials, waste, and final cost from one focused workspace.") }}</p>
+          <p class="text-sm font-extrabold uppercase tracking-[0.22em] text-[#ffb089]">{{ t("Operations Portal") }}</p>
+          <h2 class="mt-4 text-5xl font-black leading-[1.05]">{{ t("Los Andalus") }}</h2>
+          <p class="mt-5 max-w-md text-base leading-8 text-white/78">{{ t("Your role decides which workspace opens after login.") }}</p>
         </div>
       </div>
     </div>

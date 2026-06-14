@@ -65,6 +65,15 @@ def get_raw_materials(search: str | None = None):
 		limit_page_length=200,
 	)
 
+	# Available stock per item, summed across all warehouses.
+	codes = [it.get("item_code") for it in items]
+	qty_map = {}
+	if codes:
+		for b in frappe.get_all(
+			"Bin", filters={"item_code": ["in", codes]}, fields=["item_code", "actual_qty"]
+		):
+			qty_map[b.item_code] = qty_map.get(b.item_code, 0) + (b.actual_qty or 0)
+
 	result = []
 	for it in items:
 		rate = it.get("valuation_rate") or it.get("last_purchase_rate") or it.get("standard_rate") or 0
@@ -75,6 +84,7 @@ def get_raw_materials(search: str | None = None):
 				"name_en": html.unescape(frappe.utils.strip_html(it.get("description") or "")).strip(),
 				"unit": it.get("stock_uom"),
 				"rate": float(rate),
+				"available_qty": float(qty_map.get(it.get("item_code"), 0)),
 			}
 		)
 	return result
