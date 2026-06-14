@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 import frappe
 from frappe import _
 
@@ -53,17 +51,6 @@ def get_current_session():
 		"language": frappe.local.lang or "ar",
 		"can_produce": can_produce(),
 		"can_enter": can_enter(),
-	}
-
-
-@frappe.whitelist()
-def get_food_logger_defaults():
-	return {
-		"products": [
-			{"name": "Beef Burger", "label": _("Beef Burger")},
-			{"name": "Chicken Burger", "label": _("Chicken Burger")},
-			{"name": "Burger Buns", "label": _("Burger Buns")},
-		]
 	}
 
 
@@ -188,9 +175,12 @@ def get_variant_bom(variant: str):
 	)
 
 	materials = []
+	unit_cost = 0.0
+	loss_rate = 0.0
 	if bom_name:
 		bom = frappe.get_doc("BOM", bom_name)
 		base = bom.quantity or 1
+		unit_cost = float(bom.total_cost or 0) / base
 		codes = [d.item_code for d in bom.items]
 		details = {
 			d.name: d
@@ -214,8 +204,17 @@ def get_variant_bom(variant: str):
 					"available_qty": float(qty_map.get(d.item_code, 0)),
 				}
 			)
+		# Loss (process kg loss) cost proxy = the costliest material's rate per its unit.
+		loss_rate = max((m["rate"] for m in materials), default=0.0)
 
-	return {"variant": variant, "weight": weight, "bom": bom_name, "materials": materials}
+	return {
+		"variant": variant,
+		"weight": weight,
+		"bom": bom_name,
+		"materials": materials,
+		"unit_cost": unit_cost,
+		"loss_rate": loss_rate,
+	}
 
 
 @frappe.whitelist()
@@ -426,27 +425,3 @@ def save_draft(draft, totals=None):
 	batch.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"batchName": batch.name, "status": batch.status}
-
-
-@frappe.whitelist()
-def save_food_logger_batch(draft: dict, totals: dict):
-	if frappe.session.user == "Guest":
-		frappe.throw(_("Login required"), frappe.PermissionError)
-
-	produced_qty = float(draft.get("producedQty") or 0)
-	if produced_qty <= 0:
-		frappe.throw(_("Produced quantity must be greater than zero"))
-
-	batch_ref = draft.get("batchRef") or f"#B-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-	return {
-		"batchRef": batch_ref,
-		"product": draft.get("product"),
-		"productName": draft.get("productName"),
-		"variant": draft.get("variant"),
-		"weight": draft.get("weight"),
-		"producedQty": produced_qty,
-		"totalCost": float(totals.get("totalCost") or 0),
-		"unitCost": float(totals.get("unitCost") or 0),
-		"savedAt": frappe.utils.now_datetime().isoformat(),
-		"savedBy": frappe.session.user,
-	}

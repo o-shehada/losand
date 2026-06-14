@@ -22,6 +22,10 @@ const productsLoading = ref(true)
 const bomLoading = ref(false)
 const showPicker = ref(false)
 
+// Waste/loss cost rates derived from ERPNext: waste = FG per-piece cost, loss = costliest material rate.
+const wasteRate = ref(0)
+const lossRate = ref(0)
+
 const totals = computed(() => calc(draft))
 const presentation = computed(() => presentationFor(draft.product))
 const selectedProductObj = computed(() => products.value.find((p) => p.code === draft.product))
@@ -72,9 +76,21 @@ async function loadBom(variant) {
     const res = await call("losand.api.manufacture.get_variant_bom", { variant })
     draft.weight = res.weight || draft.weight
     draft.materials = (res.materials || []).map((m, i) => materialFromBom(m, draft.producedQty, i))
+    // Derive waste/loss cost rates from ERPNext and apply to existing rows
+    if (res.unit_cost) wasteRate.value = res.unit_cost
+    if (res.loss_rate) lossRate.value = res.loss_rate
+    draft.waste.forEach((w) => (w.rate = wasteRate.value))
+    draft.loss.forEach((l) => (l.rate = lossRate.value))
   } finally {
     bomLoading.value = false
   }
+}
+
+function addWaste() {
+  draft.waste.push({ reason: "", qty: 0, unit: "قطعة", rate: wasteRate.value })
+}
+function addLoss() {
+  draft.loss.push({ reason: "", qty: 0, unit: "كجم", rate: lossRate.value })
 }
 
 function adjustQty(delta) {
@@ -476,7 +492,7 @@ onUnmounted(() => clearInterval(timer))
                   </button>
                 </div>
               </div>
-              <button @click="draft.waste.push({ reason: '', qty: 0, unit: 'قطعة', rate: 24 })" class="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-red-200 rounded-xl text-danger text-sm font-semibold hover:bg-red-50 transition-colors">
+              <button @click="addWaste" class="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-red-200 rounded-xl text-danger text-sm font-semibold hover:bg-red-50 transition-colors">
                 <i class="fa-solid fa-plus text-xs"></i>
                 إضافة هالك
               </button>
@@ -512,7 +528,7 @@ onUnmounted(() => clearInterval(timer))
                   </button>
                 </div>
               </div>
-              <button @click="draft.loss.push({ reason: '', qty: 0, unit: 'كجم', rate: 45 })" class="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-amber-200 rounded-xl text-warning text-sm font-semibold hover:bg-amber-50 transition-colors">
+              <button @click="addLoss" class="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-amber-200 rounded-xl text-warning text-sm font-semibold hover:bg-amber-50 transition-colors">
                 <i class="fa-solid fa-plus text-xs"></i>
                 إضافة فاقد
               </button>
