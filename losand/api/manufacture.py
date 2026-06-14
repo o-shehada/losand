@@ -5,6 +5,28 @@ from datetime import datetime
 import frappe
 from frappe import _
 
+COMPANY = "Los Andalus"
+SOURCE_WAREHOUSE = "Stores - LA"
+WIP_WAREHOUSE = "Work In Progress - LA"
+FG_WAREHOUSE = "Finished Goods - LA"
+RAW_MATERIAL_GROUP = "Raw Material"
+
+# Roles allowed to POST production (create stock). Operators below may only draft/enter.
+PRODUCE_ROLES = {"System Manager", "Manufacturing Manager", "Manufacture Supervisor"}
+ENTER_ROLES = PRODUCE_ROLES | {"Manufacturing User", "Manufacture Operator", "Stock User"}
+
+
+def _roles():
+	return set(frappe.get_roles())
+
+
+def can_produce():
+	return bool(_roles() & PRODUCE_ROLES)
+
+
+def can_enter():
+	return bool(_roles() & ENTER_ROLES)
+
 
 @frappe.whitelist()
 def get_current_session():
@@ -12,6 +34,8 @@ def get_current_session():
 		"user": frappe.session.user,
 		"authenticated": frappe.session.user != "Guest",
 		"language": frappe.local.lang or "ar",
+		"can_produce": can_produce(),
+		"can_enter": can_enter(),
 	}
 
 
@@ -24,9 +48,6 @@ def get_food_logger_defaults():
 			{"name": "Burger Buns", "label": _("Burger Buns")},
 		]
 	}
-
-
-RAW_MATERIAL_GROUP = "Raw Material"
 
 
 @frappe.whitelist()
@@ -65,14 +86,9 @@ def get_raw_materials(search: str | None = None):
 		limit_page_length=200,
 	)
 
-	# Available stock per item, summed across all warehouses.
+	# Available stock per item in the source warehouse.
 	codes = [it.get("item_code") for it in items]
-	qty_map = {}
-	if codes:
-		for b in frappe.get_all(
-			"Bin", filters={"item_code": ["in", codes]}, fields=["item_code", "actual_qty"]
-		):
-			qty_map[b.item_code] = qty_map.get(b.item_code, 0) + (b.actual_qty or 0)
+	qty_map = _stock_map(codes)
 
 	result = []
 	for it in items:
@@ -90,11 +106,13 @@ def get_raw_materials(search: str | None = None):
 	return result
 
 
-def _stock_map(codes):
+def _stock_map(codes, warehouse=SOURCE_WAREHOUSE):
 	qty_map = {}
 	if codes:
 		for b in frappe.get_all(
-			"Bin", filters={"item_code": ["in", codes]}, fields=["item_code", "actual_qty"]
+			"Bin",
+			filters={"item_code": ["in", codes], "warehouse": warehouse},
+			fields=["item_code", "actual_qty"],
 		):
 			qty_map[b.item_code] = qty_map.get(b.item_code, 0) + (b.actual_qty or 0)
 	return qty_map
@@ -181,12 +199,6 @@ def get_variant_bom(variant: str):
 	return {"variant": variant, "weight": weight, "bom": bom_name, "materials": materials}
 
 
-COMPANY = "Los Andalus"
-SOURCE_WAREHOUSE = "Stores - LA"
-WIP_WAREHOUSE = "Work In Progress - LA"
-FG_WAREHOUSE = "Finished Goods - LA"
-
-
 @frappe.whitelist()
 def submit_batch(draft, totals=None):
 	"""Phase-2: turn a Food Logger draft into real ERPNext production documents.
@@ -206,6 +218,11 @@ def submit_batch(draft, totals=None):
 
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Login required"), frappe.PermissionError)
+	if not can_produce():
+		frappe.throw(
+			_("You do not have permission to produce. Manufacture Supervisor role required."),
+			frappe.PermissionError,
+		)
 
 	variant = draft.get("variant")
 	qty = float(draft.get("producedQty") or 0)
@@ -308,6 +325,22 @@ def submit_batch(draft, totals=None):
 		total_cost = unit_cost * qty
 		batch.db_set("unit_cost", unit_cost)
 		batch.db_set("total_cost", total_cost)
+
+		# 4) Waste = damaged finished pieces -> Material Issue from FG (capped at produced qty).
+		# Process loss (kg) is already reflected in actual material consumption, so it is
+		# recorded on the batch but NOT posted as a separate stock movement.
+		waste_qty = sum(float(w.get("qty") or 0) for w in (draft.get("waste") or []))
+		waste_qty = min(waste_qty, qty)
+		if waste_qty > 0:
+			issue = frappe.new_doc("Stock Entry")
+			issue.stock_entry_type = "Material Issue"
+			issue.company = COMPANY
+			issue.from_warehouse = FG_WAREHOUSE
+			issue.append("items", {"item_code": variant, "qty": waste_qty, "s_warehouse": FG_WAREHOUSE})
+			issue.insert(ignore_permissions=True)
+			issue.submit()
+			batch.db_set("waste_entry", issue.name)
+
 		batch.db_set("status", "Completed")
 		frappe.db.commit()
 	except Exception:
@@ -331,6 +364,47 @@ def submit_batch(draft, totals=None):
 		"savedBy": frappe.session.user,
 		"savedAt": frappe.utils.now_datetime().isoformat(),
 	}
+
+
+@frappe.whitelist()
+def save_draft(draft, totals=None):
+	"""Save a Food Logger draft as a Draft-status batch (no Work Order / stock movement)."""
+	import json
+
+	if isinstance(draft, str):
+		draft = json.loads(draft)
+
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"), frappe.PermissionError)
+	if not can_enter():
+		frappe.throw(_("You do not have permission to enter production data."), frappe.PermissionError)
+
+	name = draft.get("batchName")
+	if name and frappe.db.exists("Los Andalus Production Batch", name):
+		batch = frappe.get_doc("Los Andalus Production Batch", name)
+	else:
+		batch = frappe.new_doc("Los Andalus Production Batch")
+
+	batch.update(
+		{
+			"product": draft.get("product"),
+			"product_name": draft.get("productName"),
+			"variant": draft.get("variant"),
+			"bom": draft.get("variant") and frappe.db.get_value("Item", draft.get("variant"), "default_bom"),
+			"batch_reference": draft.get("batchRef"),
+			"produced_qty": float(draft.get("producedQty") or 0),
+			"weight": draft.get("weight") or 0,
+			"operator": frappe.session.user,
+			"status": "Draft",
+			"materials_json": json.dumps(draft.get("materials") or [], ensure_ascii=False),
+			"waste_json": json.dumps(draft.get("waste") or [], ensure_ascii=False),
+			"loss_json": json.dumps(draft.get("loss") or [], ensure_ascii=False),
+			"notes": draft.get("notes"),
+		}
+	)
+	batch.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {"batchName": batch.name, "status": batch.status}
 
 
 @frappe.whitelist()

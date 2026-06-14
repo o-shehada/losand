@@ -193,8 +193,17 @@ def _ensure_manufacturing_settings():
 	)
 
 
+def _ensure_roles():
+	for role in ("Manufacture Operator", "Manufacture Supervisor"):
+		if not frappe.db.exists("Role", role):
+			frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 1}).insert(
+				ignore_permissions=True
+			)
+
+
 def run():
 	_ensure_manufacturing_settings()
+	_ensure_roles()
 	_ensure_uoms()
 	_ensure_raw_materials()
 	_ensure_weight_attribute()

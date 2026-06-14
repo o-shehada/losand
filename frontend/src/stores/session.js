@@ -3,6 +3,8 @@ import { getCurrentSession, login, logout } from "@/lib/api"
 
 export const session = reactive({
   user: window.boot?.user || "Guest",
+  canProduce: false,
+  canEnter: false,
   loading: false,
   error: "",
 })
@@ -17,6 +19,8 @@ export async function refreshSession() {
   try {
     const current = await getCurrentSession()
     session.user = current.user
+    session.canProduce = !!current.can_produce
+    session.canEnter = !!current.can_enter
     return current
   } finally {
     session.loading = false

@@ -97,6 +97,24 @@ function continueToSummary() {
   router.push("/food-logger/summary")
 }
 
+const draftSaving = ref(false)
+const draftSavedMsg = ref("")
+async function saveDraft() {
+  if (draftSaving.value) return
+  draftSaving.value = true
+  try {
+    const res = await call("losand.api.manufacture.save_draft", { draft })
+    draft.batchName = res.batchName
+    sessionStorage.setItem("foodLoggerDraft", JSON.stringify(draft))
+    draftSavedMsg.value = `تم حفظ المسودة (${res.batchName})`
+    setTimeout(() => (draftSavedMsg.value = ""), 3000)
+  } catch (e) {
+    alert(e.message)
+  } finally {
+    draftSaving.value = false
+  }
+}
+
 async function loadAll() {
   productsLoading.value = true
   try {
@@ -542,10 +560,14 @@ onUnmounted(() => clearInterval(timer))
           <span v-else-if="!draft.variant">اختر المنتج للمتابعة</span>
           <span v-else>أدخل كمية إنتاج أكبر من صفر للمتابعة</span>
         </div>
+        <div v-if="draftSavedMsg" class="mb-2 flex items-center gap-2 text-xs font-bold text-success bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>{{ draftSavedMsg }}</span>
+        </div>
         <div class="flex items-center gap-3">
-          <button class="flex items-center gap-2 px-5 py-3 bg-slate-100 text-muted rounded-xl text-sm font-semibold border border-border hover:bg-slate-200 transition-colors min-h-[44px]">
-            <i class="fa-regular fa-floppy-disk text-sm"></i>
-            حفظ مسودة
+          <button @click="saveDraft" :disabled="draftSaving" class="flex items-center gap-2 px-5 py-3 bg-slate-100 text-muted rounded-xl text-sm font-semibold border border-border hover:bg-slate-200 transition-colors min-h-[44px] disabled:opacity-50">
+            <i class="text-sm" :class="draftSaving ? 'fa-solid fa-spinner fa-spin' : 'fa-regular fa-floppy-disk'"></i>
+            {{ draftSaving ? "جارٍ الحفظ..." : "حفظ مسودة" }}
           </button>
           <button @click="continueToSummary" :disabled="!canContinue" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors min-h-[44px] shadow-md shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary">
             <i class="fa-solid fa-calculator text-base"></i>
