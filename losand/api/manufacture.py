@@ -181,6 +181,158 @@ def get_variant_bom(variant: str):
 	return {"variant": variant, "weight": weight, "bom": bom_name, "materials": materials}
 
 
+COMPANY = "Los Andalus"
+SOURCE_WAREHOUSE = "Stores - LA"
+WIP_WAREHOUSE = "Work In Progress - LA"
+FG_WAREHOUSE = "Finished Goods - LA"
+
+
+@frappe.whitelist()
+def submit_batch(draft, totals=None):
+	"""Phase-2: turn a Food Logger draft into real ERPNext production documents.
+
+	Creates (and submits): Work Order -> Material Transfer for Manufacture (actual qty)
+	-> Manufacture Stock Entry, all tied together by a Los Andalus Production Batch log.
+	Returns the batch confirmation with ERPNext's authoritative per-piece cost.
+	"""
+	import json
+
+	from erpnext.manufacturing.doctype.work_order.work_order import make_stock_entry
+
+	if isinstance(draft, str):
+		draft = json.loads(draft)
+	if isinstance(totals, str):
+		totals = json.loads(totals or "{}")
+
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"), frappe.PermissionError)
+
+	variant = draft.get("variant")
+	qty = float(draft.get("producedQty") or 0)
+	materials = draft.get("materials") or []
+
+	if not variant:
+		frappe.throw(_("Select a product variant first"))
+	if qty <= 0:
+		frappe.throw(_("Produced quantity must be greater than zero"))
+
+	bom_no = frappe.db.get_value("Item", variant, "default_bom")
+	if not bom_no:
+		frappe.throw(_("No active BOM found for {0}").format(variant))
+
+	# Stock guard (defence in depth; UI also blocks this)
+	for m in materials:
+		actual = float(m.get("actual") or 0)
+		if actual <= 0:
+			continue
+		on_hand = frappe.db.get_value("Bin", {"item_code": m.get("item_code"), "warehouse": SOURCE_WAREHOUSE}, "actual_qty") or 0
+		if actual > on_hand:
+			frappe.throw(
+				_("Not enough stock of {0}: need {1}, available {2}").format(m.get("name_ar") or m.get("item_code"), actual, on_hand)
+			)
+
+	batch = frappe.new_doc("Los Andalus Production Batch")
+	batch.update(
+		{
+			"product": draft.get("product"),
+			"product_name": draft.get("productName"),
+			"variant": variant,
+			"bom": bom_no,
+			"batch_reference": draft.get("batchRef"),
+			"produced_qty": qty,
+			"weight": draft.get("weight") or 0,
+			"source_warehouse": SOURCE_WAREHOUSE,
+			"wip_warehouse": WIP_WAREHOUSE,
+			"target_warehouse": FG_WAREHOUSE,
+			"operator": frappe.session.user,
+			"status": "Draft",
+			"materials_json": json.dumps(materials, ensure_ascii=False),
+			"waste_json": json.dumps(draft.get("waste") or [], ensure_ascii=False),
+			"loss_json": json.dumps(draft.get("loss") or [], ensure_ascii=False),
+			"notes": draft.get("notes"),
+		}
+	)
+	batch.insert(ignore_permissions=True)
+
+	try:
+		# 1) Work Order
+		wo = frappe.new_doc("Work Order")
+		wo.update(
+			{
+				"production_item": variant,
+				"bom_no": bom_no,
+				"qty": qty,
+				"company": COMPANY,
+				"source_warehouse": SOURCE_WAREHOUSE,
+				"wip_warehouse": WIP_WAREHOUSE,
+				"fg_warehouse": FG_WAREHOUSE,
+			}
+		)
+		wo.insert(ignore_permissions=True)
+		wo.submit()
+		batch.db_set("work_order", wo.name)
+		batch.db_set("status", "WO Created")
+
+		# 2) Material Transfer for Manufacture, overridden with ACTUAL consumption
+		actual_map = {m.get("item_code"): float(m.get("actual") or 0) for m in materials}
+		transfer = frappe.get_doc(make_stock_entry(wo.name, "Material Transfer for Manufacture", qty))
+		kept = []
+		for it in transfer.items:
+			a = actual_map.get(it.item_code)
+			if a is None or a <= 0:
+				continue
+			it.qty = a
+			kept.append(it)
+		transfer.items = kept
+		bom_codes = {it.item_code for it in transfer.items}
+		for code, a in actual_map.items():
+			if a > 0 and code not in bom_codes:
+				transfer.append("items", {"item_code": code, "qty": a, "s_warehouse": SOURCE_WAREHOUSE, "t_warehouse": WIP_WAREHOUSE})
+		transfer.insert(ignore_permissions=True)
+		transfer.submit()
+		batch.db_set("material_transfer_entry", transfer.name)
+		batch.db_set("status", "Materials Transferred")
+
+		# 3) Manufacture (consumes transferred from WIP, receives FG; ERPNext costs it)
+		manufacture = frappe.get_doc(make_stock_entry(wo.name, "Manufacture", qty))
+		manufacture.insert(ignore_permissions=True)
+		manufacture.submit()
+		batch.db_set("manufacture_entry", manufacture.name)
+
+		# ERPNext-computed finished-good valuation = authoritative per-piece cost
+		unit_cost = 0.0
+		for it in manufacture.items:
+			if it.is_finished_item or (it.t_warehouse and it.item_code == variant):
+				unit_cost = float(it.valuation_rate or 0)
+				break
+		total_cost = unit_cost * qty
+		batch.db_set("unit_cost", unit_cost)
+		batch.db_set("total_cost", total_cost)
+		batch.db_set("status", "Completed")
+		frappe.db.commit()
+	except Exception:
+		batch.db_set("status", "Failed")
+		batch.db_set("error_log", frappe.get_traceback())
+		frappe.db.commit()
+		raise
+
+	return {
+		"batchName": batch.name,
+		"batchRef": draft.get("batchRef"),
+		"product": draft.get("product"),
+		"productName": draft.get("productName"),
+		"variant": variant,
+		"weight": draft.get("weight"),
+		"producedQty": qty,
+		"workOrder": batch.work_order,
+		"manufactureEntry": batch.manufacture_entry,
+		"unitCost": batch.unit_cost,
+		"totalCost": batch.total_cost,
+		"savedBy": frappe.session.user,
+		"savedAt": frappe.utils.now_datetime().isoformat(),
+	}
+
+
 @frappe.whitelist()
 def save_food_logger_batch(draft: dict, totals: dict):
 	if frappe.session.user == "Guest":

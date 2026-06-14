@@ -183,7 +183,18 @@ def _ensure_bom(variant_code, kind, weight_g):
 	bom.submit()
 
 
+def _ensure_manufacturing_settings():
+	# Consume what was actually transferred to WIP (so operator's actual quantities drive cost),
+	# not the BOM-planned amounts.
+	frappe.db.set_single_value(
+		"Manufacturing Settings",
+		"backflush_raw_materials_based_on",
+		"Material Transferred for Manufacture",
+	)
+
+
 def run():
+	_ensure_manufacturing_settings()
 	_ensure_uoms()
 	_ensure_raw_materials()
 	_ensure_weight_attribute()

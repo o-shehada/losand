@@ -187,6 +187,13 @@ onUnmounted(() => clearInterval(timer))
               </div>
               <span class="text-sm font-bold text-text bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-lg border border-amber-200">وردية صباحية</span>
             </div>
+            <div v-if="saved.workOrder" class="flex items-center justify-between py-2.5 border-b border-border">
+              <div class="flex items-center gap-2.5">
+                <i class="fa-solid fa-industry text-muted text-sm w-4 text-center"></i>
+                <span class="text-sm text-muted font-medium">أمر التشغيل</span>
+              </div>
+              <span class="text-sm font-bold text-primary bg-primary-light px-2.5 py-0.5 rounded-lg">{{ saved.workOrder }}</span>
+            </div>
             <div class="flex items-center justify-between py-2.5">
               <div class="flex items-center gap-2.5">
                 <i class="fa-solid fa-cloud-arrow-up text-muted text-sm w-4 text-center"></i>

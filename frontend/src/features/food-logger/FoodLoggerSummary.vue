@@ -30,11 +30,12 @@ async function save() {
   if (!confirmed.value || saving.value) return
   saving.value = true
   try {
-    const result = await call("losand.api.manufacture.save_food_logger_batch", {
+    const result = await call("losand.api.manufacture.submit_batch", {
       draft,
       totals: totals.value,
     })
     sessionStorage.setItem("foodLoggerSuccess", JSON.stringify(result))
+    sessionStorage.removeItem("foodLoggerDraft")
     router.push("/food-logger/success")
   } catch (e) {
     saving.value = false
