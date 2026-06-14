@@ -307,6 +307,7 @@ def submit_batch(draft, totals=None):
 		)
 		wo.insert(ignore_permissions=True)
 		wo.submit()
+		frappe.db.set_value("Work Order", wo.name, "custom_production_batch", batch.name)
 		batch.db_set("work_order", wo.name)
 		batch.db_set("status", "WO Created")
 
@@ -327,6 +328,7 @@ def submit_batch(draft, totals=None):
 				transfer.append("items", {"item_code": code, "qty": a, "s_warehouse": c.source, "t_warehouse": c.wip})
 		transfer.insert(ignore_permissions=True)
 		transfer.submit()
+		frappe.db.set_value("Stock Entry", transfer.name, "custom_production_batch", batch.name)
 		batch.db_set("material_transfer_entry", transfer.name)
 		batch.db_set("status", "Materials Transferred")
 
@@ -334,6 +336,7 @@ def submit_batch(draft, totals=None):
 		manufacture = frappe.get_doc(make_stock_entry(wo.name, "Manufacture", qty))
 		manufacture.insert(ignore_permissions=True)
 		manufacture.submit()
+		frappe.db.set_value("Stock Entry", manufacture.name, "custom_production_batch", batch.name)
 		batch.db_set("manufacture_entry", manufacture.name)
 
 		# ERPNext-computed finished-good valuation = authoritative per-piece cost
@@ -359,6 +362,7 @@ def submit_batch(draft, totals=None):
 			issue.append("items", {"item_code": variant, "qty": waste_qty, "s_warehouse": c.fg})
 			issue.insert(ignore_permissions=True)
 			issue.submit()
+			frappe.db.set_value("Stock Entry", issue.name, "custom_production_batch", batch.name)
 			batch.db_set("waste_entry", issue.name)
 
 		batch.db_set("status", "Completed")

@@ -193,6 +193,26 @@ def _ensure_manufacturing_settings():
 	)
 
 
+def _ensure_link_back_fields():
+	# Reverse link so the Production Batch "Connections" tab can group its WO + Stock Entries.
+	for dt in ("Work Order", "Stock Entry"):
+		fid = f"{dt}-custom_production_batch"
+		if not frappe.db.exists("Custom Field", fid):
+			frappe.get_doc(
+				{
+					"doctype": "Custom Field",
+					"dt": dt,
+					"fieldname": "custom_production_batch",
+					"label": "Production Batch",
+					"fieldtype": "Link",
+					"options": "Los Andalus Production Batch",
+					"insert_after": "company",
+					"read_only": 1,
+					"no_copy": 1,
+				}
+			).insert(ignore_permissions=True)
+
+
 def _ensure_roles():
 	for role in ("Manufacture Operator", "Manufacture Supervisor"):
 		if not frappe.db.exists("Role", role):
@@ -223,6 +243,7 @@ def _ensure_app_settings():
 def run():
 	_ensure_manufacturing_settings()
 	_ensure_roles()
+	_ensure_link_back_fields()
 	_ensure_app_settings()
 	_ensure_uoms()
 	_ensure_raw_materials()
