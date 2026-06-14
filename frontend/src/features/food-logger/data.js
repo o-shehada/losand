@@ -1,12 +1,10 @@
 // Seed data + helpers for the Food Logger flow.
-// Class-name literals (bg-red-50, text-red-400, …) are written out in full so
-// Tailwind's JIT scanner picks them up from this file.
+// Products/variants/BOMs come from ERPNext at runtime; this file holds presentation
+// (images/icons keyed by template code) and pure helpers.
+// Class-name literals are written in full so Tailwind's JIT scanner picks them up.
 
-export const products = [
-  {
-    key: "beef",
-    name_ar: "برجر لحم",
-    name_en: "Beef Burger",
+export const PRODUCT_PRESENTATION = {
+  "Beef Burger": {
     img: "https://storage.googleapis.com/uxpilot-auth.appspot.com/8de04f0132-a4d26b9fac68d3f1dc4c.png",
     icon: "fa-burger",
     headBg: "bg-red-50",
@@ -14,10 +12,7 @@ export const products = [
     iconBg: "bg-red-100",
     iconText: "text-red-500",
   },
-  {
-    key: "chicken",
-    name_ar: "برجر دجاج",
-    name_en: "Chicken Burger",
+  "Chicken Burger": {
     img: "https://storage.googleapis.com/uxpilot-auth.appspot.com/03643144d9-907fefba5c1e40b19cf8.png",
     icon: "fa-drumstick-bite",
     headBg: "bg-amber-50",
@@ -25,10 +20,7 @@ export const products = [
     iconBg: "bg-amber-100",
     iconText: "text-amber-500",
   },
-  {
-    key: "buns",
-    name_ar: "خبز البرجر",
-    name_en: "Burger Buns",
+  "Burger Buns": {
     img: "https://storage.googleapis.com/uxpilot-auth.appspot.com/516077dbb6-fcb5658aad228244c8f3.png",
     icon: "fa-bread-slice",
     headBg: "bg-orange-50",
@@ -36,19 +28,33 @@ export const products = [
     iconBg: "bg-orange-100",
     iconText: "text-orange-500",
   },
-]
+}
+
+const FALLBACK_PRESENTATION = {
+  img: null,
+  icon: "fa-burger",
+  headBg: "bg-slate-50",
+  headBorder: "border-slate-100",
+  iconBg: "bg-slate-100",
+  iconText: "text-slate-500",
+}
+
+export function presentationFor(code) {
+  return PRODUCT_PRESENTATION[code] || FALLBACK_PRESENTATION
+}
 
 export function createDraft() {
   return {
     batchRef: "#B-2024-0847",
     dateLabel: "الجمعة، 6 يونيو 2025",
     shift: "morning",
-    product: "beef",
+    product: "", // template item_code, set after products load
+    productName: "",
+    variant: "", // variant item_code
+    weight: 0, // grams per piece (from variant)
     producedQty: 480,
-    weightPerPiece: 120,
     notes: "",
-    // Materials are loaded from ERPNext Items (Raw Material group) at runtime.
-    materials: [],
+    materials: [], // loaded from the variant BOM
     waste: [
       { reason: "برجر لحم محترق", qty: 12, unit: "قطعة", rate: 24 },
       { reason: "خبز منتهي الصلاحية", qty: 8, unit: "قطعة", rate: 24 },
@@ -70,7 +76,7 @@ export function calc(draft) {
   const totalCost = materialTotal + wasteTotal + lossTotal
   const qty = Number(draft.producedQty) || 0
   const unitCost = qty ? totalCost / qty : 0
-  const totalWeight = (qty * (Number(draft.weightPerPiece) || 0)) / 1000
+  const totalWeight = (qty * (Number(draft.weight) || 0)) / 1000
   const pct = (v) => (totalCost ? (v / totalCost) * 100 : 0)
   return {
     materialTotal,
@@ -94,11 +100,7 @@ export const fmt = (n) =>
 export const fmt1 = (n) =>
   Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 })
 
-export function productByKey(key) {
-  return products.find((p) => p.key === key) || products[0]
-}
-
-// Icon palette assigned to material rows by index (literal classes so Tailwind JIT picks them up).
+// Icon palette assigned to material rows by index (literal classes for Tailwind JIT).
 export const palette = [
   { icon: "fa-drumstick-bite", wrap: "bg-red-50", color: "text-red-400" },
   { icon: "fa-egg", wrap: "bg-amber-50", color: "text-amber-400" },
@@ -111,7 +113,24 @@ export const palette = [
 
 export const iconFor = (i) => palette[i % palette.length]
 
-// Build a material row from an ERPNext Item payload.
+// Build a material row from a BOM material payload (planned per-piece × pieces).
+export function materialFromBom(m, producedQty, index) {
+  const perPiece = Number(m.per_piece) || 0
+  const planned = perPiece * (Number(producedQty) || 0)
+  return {
+    item_code: m.item_code,
+    name_ar: m.name_ar,
+    name_en: m.name_en,
+    unit: m.unit,
+    rate: m.rate,
+    available: m.available_qty ?? 0,
+    perPiece,
+    actual: planned,
+    ...iconFor(index),
+  }
+}
+
+// Build an ad-hoc material row (added via picker; not in the BOM).
 export function materialFromItem(item, index) {
   return {
     item_code: item.item_code,
@@ -120,7 +139,7 @@ export function materialFromItem(item, index) {
     unit: item.unit,
     rate: item.rate,
     available: item.available_qty ?? 0,
-    planned: 0,
+    perPiece: 0,
     actual: 0,
     ...iconFor(index),
   }

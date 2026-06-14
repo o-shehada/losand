@@ -3,7 +3,7 @@ import { computed, ref, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import { session, signOut } from "@/stores/session"
 import { cur } from "@/lib/currency"
-import { fmt, productByKey } from "./data"
+import { fmt, presentationFor } from "./data"
 
 const router = useRouter()
 
@@ -12,7 +12,7 @@ async function logout() {
   router.replace("/login")
 }
 const saved = computed(() => JSON.parse(sessionStorage.getItem("foodLoggerSuccess") || "{}"))
-const product = computed(() => productByKey(saved.value.product || "beef"))
+const presentation = computed(() => presentationFor(saved.value.product))
 
 const copied = ref(false)
 function copyRef() {
@@ -132,8 +132,9 @@ onUnmounted(() => clearInterval(timer))
           <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-x-reverse divide-border border-t border-border">
             <div class="px-4 py-4 text-center">
               <p class="text-xs text-muted mb-1 font-medium">المنتج</p>
-              <i class="fa-solid text-primary text-lg mb-1" :class="product.icon"></i>
-              <p class="text-xs font-bold text-text">{{ product.name_ar }}</p>
+              <i class="fa-solid text-primary text-lg mb-1" :class="presentation.icon"></i>
+              <p class="text-xs font-bold text-text">{{ saved.productName }}</p>
+              <p class="text-[11px] text-muted">{{ saved.weight }} جم</p>
             </div>
             <div class="px-4 py-4 text-center">
               <p class="text-xs text-muted mb-1 font-medium">الكمية</p>

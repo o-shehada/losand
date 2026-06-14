@@ -4,7 +4,7 @@ import { useRouter } from "vue-router"
 import { call } from "@/lib/api"
 import { session, signOut } from "@/stores/session"
 import { cur } from "@/lib/currency"
-import { createDraft, calc, fmt, fmt1, productByKey } from "./data"
+import { createDraft, calc, fmt, fmt1, presentationFor } from "./data"
 
 const router = useRouter()
 
@@ -16,7 +16,7 @@ async function logout() {
 const stored = sessionStorage.getItem("foodLoggerDraft")
 const draft = reactive(stored ? JSON.parse(stored) : createDraft())
 const totals = computed(() => calc(draft))
-const product = computed(() => productByKey(draft.product))
+const presentation = computed(() => presentationFor(draft.product))
 
 const confirmed = ref(false)
 const saving = ref(false)
@@ -123,12 +123,12 @@ onUnmounted(() => clearInterval(timer))
           <div class="bg-gradient-to-l from-primary to-primary-dark px-5 py-4 flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-                <i class="fa-solid text-white text-xl" :class="product.icon"></i>
+                <i class="fa-solid text-white text-xl" :class="presentation.icon"></i>
               </div>
               <div>
                 <p class="text-white/80 text-xs font-medium">المنتج المحدد</p>
-                <p class="text-white font-bold text-lg">{{ product.name_ar }}</p>
-                <p class="text-white/70 text-xs">{{ product.name_en }}</p>
+                <p class="text-white font-bold text-lg">{{ draft.productName }}</p>
+                <p class="text-white/70 text-xs">{{ draft.weight }} جم / قطعة</p>
               </div>
             </div>
             <div class="text-left">

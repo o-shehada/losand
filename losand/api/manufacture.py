@@ -90,6 +90,97 @@ def get_raw_materials(search: str | None = None):
 	return result
 
 
+def _stock_map(codes):
+	qty_map = {}
+	if codes:
+		for b in frappe.get_all(
+			"Bin", filters={"item_code": ["in", codes]}, fields=["item_code", "actual_qty"]
+		):
+			qty_map[b.item_code] = qty_map.get(b.item_code, 0) + (b.actual_qty or 0)
+	return qty_map
+
+
+@frappe.whitelist()
+def get_allowed_products():
+	"""Final-product templates the user may produce, each with its weight variants
+	and the flagged default variant. (Role filtering comes in Phase 2.)"""
+	templates = frappe.get_all(
+		"Item", filters={"has_variants": 1, "disabled": 0}, fields=["item_code", "item_name", "image"]
+	)
+	result = []
+	for t in templates:
+		variants = frappe.get_all(
+			"Item",
+			filters={"variant_of": t.item_code, "disabled": 0},
+			fields=["item_code", "weight_per_unit", "custom_is_default_variant"],
+			order_by="weight_per_unit asc",
+		)
+		if not variants:
+			continue
+		default = next((v for v in variants if v.custom_is_default_variant), variants[0])
+		result.append(
+			{
+				"code": t.item_code,
+				"name_ar": t.item_name,
+				"name_en": t.item_code,
+				"image": t.image,
+				"default_variant": default.item_code,
+				"default_weight": default.weight_per_unit,
+				"variants": [
+					{
+						"variant": v.item_code,
+						"weight": v.weight_per_unit,
+						"label": f"{int(v.weight_per_unit or 0)} جم",
+					}
+					for v in variants
+				],
+			}
+		)
+	return result
+
+
+@frappe.whitelist()
+def get_variant_bom(variant: str):
+	"""Planned per-piece materials for a product variant, from its default BOM,
+	enriched with current unit cost and available stock."""
+	import html
+
+	weight = frappe.db.get_value("Item", variant, "weight_per_unit")
+	bom_name = frappe.db.get_value("Item", variant, "default_bom") or frappe.db.get_value(
+		"BOM", {"item": variant, "is_active": 1, "is_default": 1}, "name"
+	)
+
+	materials = []
+	if bom_name:
+		bom = frappe.get_doc("BOM", bom_name)
+		base = bom.quantity or 1
+		codes = [d.item_code for d in bom.items]
+		details = {
+			d.name: d
+			for d in frappe.get_all(
+				"Item",
+				filters={"item_code": ["in", codes]},
+				fields=["item_code as name", "item_name", "description", "stock_uom", "valuation_rate"],
+			)
+		}
+		qty_map = _stock_map(codes)
+		for d in bom.items:
+			info = details.get(d.item_code, frappe._dict())
+			materials.append(
+				{
+					"item_code": d.item_code,
+					"name_ar": info.get("item_name") or d.item_code,
+					"name_en": html.unescape(frappe.utils.strip_html(info.get("description") or "")).strip(),
+					"unit": d.uom or info.get("stock_uom"),
+					"per_piece": (d.qty or 0) / base,
+					"rate": float(info.get("valuation_rate") or d.rate or 0),
+					"available_qty": float(qty_map.get(d.item_code, 0)),
+				}
+			)
+
+	return {"variant": variant, "weight": weight, "bom": bom_name, "materials": materials}
+
+
 @frappe.whitelist()
 def save_food_logger_batch(draft: dict, totals: dict):
 	if frappe.session.user == "Guest":
@@ -103,6 +194,9 @@ def save_food_logger_batch(draft: dict, totals: dict):
 	return {
 		"batchRef": batch_ref,
 		"product": draft.get("product"),
+		"productName": draft.get("productName"),
+		"variant": draft.get("variant"),
+		"weight": draft.get("weight"),
 		"producedQty": produced_qty,
 		"totalCost": float(totals.get("totalCost") or 0),
 		"unitCost": float(totals.get("unitCost") or 0),
