@@ -217,6 +217,37 @@ def get_variant_bom(variant: str):
 	}
 
 
+def _fill_batch_children(batch, draft):
+	"""Populate the batch's materials/waste/loss child tables from a draft."""
+	qty = float(draft.get("producedQty") or 0)
+	batch.set("materials", [])
+	for m in draft.get("materials") or []:
+		actual = float(m.get("actual") or 0)
+		rate = float(m.get("rate") or 0)
+		batch.append(
+			"materials",
+			{
+				"item_code": m.get("item_code"),
+				"item_name": m.get("name_ar") or m.get("item_code"),
+				"unit": m.get("unit"),
+				"planned": float(m.get("perPiece") or 0) * qty,
+				"actual": actual,
+				"rate": rate,
+				"amount": actual * rate,
+			},
+		)
+	batch.set("waste_items", [])
+	for w in draft.get("waste") or []:
+		q = float(w.get("qty") or 0)
+		rate = float(w.get("rate") or 0)
+		batch.append("waste_items", {"reason": w.get("reason"), "qty": q, "unit": w.get("unit"), "rate": rate, "amount": q * rate})
+	batch.set("loss_items", [])
+	for l in draft.get("loss") or []:
+		q = float(l.get("qty") or 0)
+		rate = float(l.get("rate") or 0)
+		batch.append("loss_items", {"reason": l.get("reason"), "qty": q, "unit": l.get("unit"), "rate": rate, "amount": q * rate})
+
+
 @frappe.whitelist()
 def submit_batch(draft, totals=None):
 	"""Phase-2: turn a Food Logger draft into real ERPNext production documents.
@@ -283,12 +314,10 @@ def submit_batch(draft, totals=None):
 			"target_warehouse": c.fg,
 			"operator": frappe.session.user,
 			"status": "Draft",
-			"materials_json": json.dumps(materials, ensure_ascii=False),
-			"waste_json": json.dumps(draft.get("waste") or [], ensure_ascii=False),
-			"loss_json": json.dumps(draft.get("loss") or [], ensure_ascii=False),
 			"notes": draft.get("notes"),
 		}
 	)
+	_fill_batch_children(batch, draft)
 	batch.insert(ignore_permissions=True)
 
 	try:
@@ -420,12 +449,10 @@ def save_draft(draft, totals=None):
 			"weight": draft.get("weight") or 0,
 			"operator": frappe.session.user,
 			"status": "Draft",
-			"materials_json": json.dumps(draft.get("materials") or [], ensure_ascii=False),
-			"waste_json": json.dumps(draft.get("waste") or [], ensure_ascii=False),
-			"loss_json": json.dumps(draft.get("loss") or [], ensure_ascii=False),
 			"notes": draft.get("notes"),
 		}
 	)
+	_fill_batch_children(batch, draft)
 	batch.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"batchName": batch.name, "status": batch.status}
