@@ -33,6 +33,7 @@
   "section_cost",
   "total_raw_cost",
   "total_output_weight",
+  "total_produced_qty",
   "column_break_cost",
   "notes",
   "error_log"
@@ -65,6 +66,7 @@
   {"fieldname": "section_cost", "fieldtype": "Section Break", "label": "Cost"},
   {"fieldname": "total_raw_cost", "fieldtype": "Currency", "label": "Total Raw Cost (C)", "read_only": 1, "description": "Total value of raw materials consumed."},
   {"fieldname": "total_output_weight", "fieldtype": "Float", "label": "Total Output Weight (g)", "read_only": 1, "description": "Σ(qty × weight per unit). Used to allocate C by weight."},
+  {"fieldname": "total_produced_qty", "fieldtype": "Float", "label": "Total Produced (pieces)", "read_only": 1, "description": "Σ of finished-product quantities."},
   {"fieldname": "column_break_cost", "fieldtype": "Column Break"},
   {"fieldname": "notes", "fieldtype": "Small Text", "label": "Notes"},
   {"fieldname": "error_log", "fieldtype": "Long Text", "label": "Error Log", "read_only": 1}
@@ -73,7 +75,7 @@
  "links": [
   {"group": "Stock", "link_doctype": "Stock Entry", "link_fieldname": "custom_production_batch"}
  ],
- "modified": "2026-06-14 08:00:00",
+ "modified": "2026-06-14 09:00:00",
  "module": "Los Andalus App",
  "name": "Los Andalus Production Batch",
  "naming_rule": "Expression (old style)",

@@ -258,7 +258,7 @@ def _ensure_number_cards():
 			"type": "Document Type",
 			"document_type": BATCH_DT,
 			"function": "Sum",
-			"aggregate_function_based_on": "produced_qty",
+			"aggregate_function_based_on": "total_produced_qty",
 			"filters_json": frappe.as_json([[BATCH_DT, "status", "=", "Completed"]]),
 		},
 		{
@@ -266,7 +266,7 @@ def _ensure_number_cards():
 			"type": "Document Type",
 			"document_type": BATCH_DT,
 			"function": "Sum",
-			"aggregate_function_based_on": "total_cost",
+			"aggregate_function_based_on": "total_raw_cost",
 			"filters_json": frappe.as_json([[BATCH_DT, "status", "=", "Completed"]]),
 		},
 		{
@@ -292,7 +292,7 @@ def _ensure_charts():
 			"chart_type": "Sum",
 			"document_type": BATCH_DT,
 			"based_on": "creation",
-			"value_based_on": "produced_qty",
+			"value_based_on": "total_produced_qty",
 			"timeseries": 1,
 			"time_interval": "Daily",
 			"timespan": "Last Month",
@@ -314,6 +314,20 @@ def _ensure_charts():
 			continue
 		doc = frappe.get_doc(dict(c, doctype="Dashboard Chart", is_public=1))
 		doc.insert(ignore_permissions=True)
+
+
+def refresh_workspace():
+	"""Re-point the number cards/charts at the new batch fields, backfill total_produced_qty,
+	and force-reload the workspace JSON."""
+	frappe.db.set_value("Number Card", "LA Total Produced", "aggregate_function_based_on", "total_produced_qty")
+	frappe.db.set_value("Number Card", "LA Production Cost", "aggregate_function_based_on", "total_raw_cost")
+	frappe.db.set_value("Dashboard Chart", "LA Daily Production", "value_based_on", "total_produced_qty")
+	for bn in frappe.get_all("Los Andalus Production Batch", pluck="name"):
+		b = frappe.get_doc("Los Andalus Production Batch", bn)
+		b.db_set("total_produced_qty", sum(float(o.qty or 0) for o in b.outputs))
+	frappe.reload_doc("Los Andalus App", "workspace", "los_andalus", force=True)
+	frappe.db.commit()
+	print("WORKSPACE_REFRESHED")
 
 
 def run():

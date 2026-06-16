@@ -194,6 +194,7 @@ def _compute_and_fill(batch, payload):
 
 	batch.total_raw_cost = total_raw_cost
 	batch.total_output_weight = total_weight
+	batch.total_produced_qty = sum(float(f.get("qty") or 0) for f in payload.get("finished_products") or [])
 
 
 @frappe.whitelist()
