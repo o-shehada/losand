@@ -1,0 +1,48 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:workbench_name",
+ "creation": "2026-06-14 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "workbench_name",
+  "product_category",
+  "disabled",
+  "section_warehouses",
+  "raw_material_warehouse",
+  "manufacturing_warehouse",
+  "column_break_wh",
+  "fg_warehouse",
+  "section_staff",
+  "staff",
+  "workers"
+ ],
+ "fields": [
+  {"fieldname": "workbench_name", "fieldtype": "Data", "label": "Workbench Name", "reqd": 1, "unique": 1, "in_list_view": 1},
+  {"fieldname": "product_category", "fieldtype": "Link", "label": "Product Category", "options": "Product Category", "reqd": 1, "in_list_view": 1, "description": "The product family produced at this workbench (e.g. Chicken Burger)."},
+  {"fieldname": "disabled", "fieldtype": "Check", "label": "Disabled"},
+  {"fieldname": "section_warehouses", "fieldtype": "Section Break", "label": "Warehouses"},
+  {"fieldname": "raw_material_warehouse", "fieldtype": "Link", "label": "Raw Material Warehouse", "options": "Warehouse", "reqd": 1},
+  {"fieldname": "manufacturing_warehouse", "fieldtype": "Link", "label": "Manufacturing Warehouse", "options": "Warehouse", "reqd": 1, "description": "WIP — raw materials are transferred here before consumption."},
+  {"fieldname": "column_break_wh", "fieldtype": "Column Break"},
+  {"fieldname": "fg_warehouse", "fieldtype": "Link", "label": "Finished Goods Warehouse", "options": "Warehouse", "reqd": 1},
+  {"fieldname": "section_staff", "fieldtype": "Section Break", "label": "Staff & Shifts"},
+  {"fieldname": "staff", "fieldtype": "Table", "label": "System Users", "options": "Workbench Staff"},
+  {"fieldname": "workers", "fieldtype": "Table", "label": "Workers (non-system)", "options": "Workbench Worker"}
+ ],
+ "links": [],
+ "modified": "2026-06-14 00:00:00",
+ "module": "Los Andalus App",
+ "name": "Workbench",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"create": 1, "delete": 0, "print": 1, "read": 1, "report": 1, "role": "Manufacturing Manager", "share": 1, "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
