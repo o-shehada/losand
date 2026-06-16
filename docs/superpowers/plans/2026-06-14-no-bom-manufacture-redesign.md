@@ -8,6 +8,7 @@
 - **Workbench** = a station for one category, carrying its 3 warehouses + staff/shifts.
 - No BOM / no Work Order. Production = plain Stock Entries: **Material Receipt (raw) → Transfer (raw→mfg) → Issue (consume) → Material Receipt (finished)**.
 - Raw consumed at **Valuation Rate**; finished cost **allocated by weight**; **FEFO** auto‑picks raw batches.
+- **Waste (الهالك) removed.** **Loss (الفاقد) kept** as a recorded figure only (reason + kg) for analysis — NOT posted as stock (already absorbed by the weight allocation).
 
 ## 1. Data model
 
@@ -18,6 +19,7 @@
 - **Los Andalus Production Batch** (repurpose existing): `workbench`, `product_category`, `shift`, the 3 warehouses (copied from workbench), `status`, links `transfer_entry` / `issue_entry` / `receipt_entry` (Stock Entry), `total_raw_cost` (C), `total_output_weight` (W); child tables:
   - **Production Material** (raw consumed): `item_code`, `qty`, `valuation_rate`, `amount`.
   - **Production Output** (finished): `item_code`, `qty`, `weight_per_unit`, `unit_cost`, `amount`, `batch_no`.
+  - **Production Loss** (الفاقد, recorded only): `reason`, `qty_kg`, `cost` (= qty_kg × C/W, for reporting).
 
 ### Custom fields on `Item`
 - `is_final_product` (Check)
@@ -54,10 +56,11 @@ Replace:
 - `save_draft` kept (new child tables). `get_current_session` kept.
 
 ## 5. Frontend flow
-- **Screen 1 — Workbench select:** cards of workbenches (each = a category: chicken/meat/bread/sauce); choosing one fixes category + warehouses + shift context.
+- **Screen 1 — Workbench + Shift select:** cards of workbenches (each = a category: chicken/meat/bread/sauce); choosing one fixes category + warehouses, and the user **picks the shift** (dropdown of that workbench's shifts) to start.
 - **Screen 2 — Entry:**
   - **Finished products table** — rows of the category's final products + qty (e.g. 44× Chicken 200g, 20× Chicken 120g).
   - **Raw materials table** — the category's raw materials; operator enters **actual consumed** qty (no planned column, no batch picker — FEFO); shows valuation rate + available stock (stock‑aware).
+  - **Loss (الفاقد) section** — optional rows of reason + kg (recorded for analysis, not posted).
   - Live preview: C, total output weight, allocated cost/piece.
 - **Summary:** finished products with allocated unit costs + totals; confirm.
 - **Success:** created Stock Entries + batch numbers + per‑product cost.
@@ -72,8 +75,8 @@ Replace:
 ## 7. What gets removed/replaced
 Item Variants/Templates, the placeholder BOMs, Work Order usage, `get_variant_bom`, the WO+Manufacture path in `submit_batch`, `custom_is_default_variant`, the variant scaffold. Production Batch + stock‑aware UI + workspace are kept (reworked).
 
-## 8. Still open (minor)
-- **Waste capture:** the new model has no explicit waste/loss (loss is absorbed by weight). Do you still want to log **damaged finished pieces** (a Material Issue from FG)? Or drop entirely?
-- **Shift in UI:** operator picks from the workbench's shifts, or auto by current time?
-- Confirm the **`product_category` Link field on Item** is how final products map to a category.
+## 8. Resolved decisions
+- **Waste (الهالك):** removed. **Loss (الفاقد):** kept as recorded data only (reason + kg), not posted.
+- **Shift:** chosen by the user on Screen 1 (dropdown of the workbench's shifts) when starting.
+- **Item → category:** via `product_category` Link field on Item (confirmed).
 - Assumption: roughly **one workbench per category** (screen 1 lists workbenches).
