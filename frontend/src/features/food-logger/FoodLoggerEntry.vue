@@ -1,111 +1,33 @@
 <script setup>
-import { reactive, computed, ref, watch, onMounted, onUnmounted } from "vue"
+import { reactive, computed, ref, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
 import { session, signOut } from "@/stores/session"
 import { call } from "@/lib/api"
 import { cur, factoryName } from "@/lib/currency"
-import { createDraft, calc, fmt, fmt1, presentationFor, productImage, materialFromBom, materialFromItem } from "./data"
+import { createDraft, calc, fmt, fmt1 } from "./data"
 
 const router = useRouter()
+const saved = sessionStorage.getItem("foodLoggerDraft")
+const draft = reactive(saved ? JSON.parse(saved) : createDraft())
+
+if (!draft.workbench) router.replace("/home")
+
+const loading = ref(true)
+const totals = computed(() => calc(draft))
 
 async function logout() {
   await signOut()
   router.replace("/login")
 }
 
-const saved = sessionStorage.getItem("foodLoggerDraft")
-const draft = reactive(saved ? JSON.parse(saved) : createDraft())
-
-const products = ref([])
-const availableMaterials = ref([])
-const productsLoading = ref(true)
-const bomLoading = ref(false)
-const showPicker = ref(false)
-
-// Waste/loss cost rates derived from ERPNext: waste = FG per-piece cost, loss = costliest material rate.
-const wasteRate = ref(0)
-const lossRate = ref(0)
-
-const totals = computed(() => calc(draft))
-const presentation = computed(() => presentationFor(draft.product))
-const selectedProductObj = computed(() => products.value.find((p) => p.code === draft.product))
-const completed = computed(() => draft.materials.filter((m) => Number(m.actual) > 0).length)
-
-const round3 = (n) => Math.round((Number(n) || 0) * 1000) / 1000
-
-// Stock awareness
-const stockIssues = computed(() =>
-  draft.materials.filter((m) => Number(m.actual) > Number(m.available || 0))
-)
-const canContinue = computed(
-  () => !!draft.variant && Number(draft.producedQty) > 0 && stockIssues.value.length === 0
-)
-
-// Picker for ad-hoc materials not in the BOM
-const addableMaterials = computed(() => {
-  const used = new Set(draft.materials.map((m) => m.item_code))
-  return availableMaterials.value.filter((it) => !used.has(it.item_code))
-})
-function addMaterial(it) {
-  draft.materials.push(materialFromItem(it, draft.materials.length))
-  showPicker.value = false
-}
-function removeMaterial(i) {
-  draft.materials.splice(i, 1)
-}
-
-async function selectProduct(code) {
-  const p = products.value.find((x) => x.code === code)
-  if (!p) return
-  draft.product = code
-  draft.productName = p.name_ar
-  await selectWeight(p.default_variant)
-}
-
-async function selectWeight(variant) {
-  const p = selectedProductObj.value
-  const v = p?.variants.find((x) => x.variant === variant)
-  draft.variant = variant
-  draft.weight = v?.weight || 0
-  await loadBom(variant)
-}
-
-async function loadBom(variant) {
-  bomLoading.value = true
-  try {
-    const res = await call("losand.api.manufacture.get_variant_bom", { variant })
-    draft.weight = res.weight || draft.weight
-    draft.materials = (res.materials || []).map((m, i) => materialFromBom(m, draft.producedQty, i))
-    // Derive waste/loss cost rates from ERPNext and apply to existing rows
-    if (res.unit_cost) wasteRate.value = res.unit_cost
-    if (res.loss_rate) lossRate.value = res.loss_rate
-    draft.waste.forEach((w) => (w.rate = wasteRate.value))
-    draft.loss.forEach((l) => (l.rate = lossRate.value))
-  } finally {
-    bomLoading.value = false
-  }
-}
-
-function addWaste() {
-  draft.waste.push({ reason: "", qty: 0, unit: "قطعة", rate: wasteRate.value })
-}
 function addLoss() {
-  draft.loss.push({ reason: "", qty: 0, unit: "كجم", rate: lossRate.value })
+  draft.losses.push({ reason: "", qty: 0, unit: "كجم" })
 }
 
-function adjustQty(delta) {
-  draft.producedQty = Math.max(0, (Number(draft.producedQty) || 0) + delta)
-}
-
-// Re-plan actual quantities when batch size changes
-watch(
-  () => draft.producedQty,
-  () => {
-    draft.materials.forEach((m) => {
-      m.actual = round3(m.perPiece * (Number(draft.producedQty) || 0))
-    })
-  }
-)
+const producedAny = computed(() => draft.finished_products.some((f) => Number(f.qty) > 0))
+const rawAny = computed(() => draft.raw_materials.some((m) => Number(m.qty) > 0))
+const stockIssues = computed(() => draft.raw_materials.filter((m) => Number(m.qty) > Number(m.available || 0)))
+const canContinue = computed(() => producedAny.value && rawAny.value && stockIssues.value.length === 0)
 
 function continueToSummary() {
   if (!canContinue.value) return
@@ -113,47 +35,6 @@ function continueToSummary() {
   router.push("/food-logger/summary")
 }
 
-const draftSaving = ref(false)
-const draftSavedMsg = ref("")
-async function saveDraft() {
-  if (draftSaving.value) return
-  draftSaving.value = true
-  try {
-    const res = await call("losand.api.manufacture.save_draft", { draft })
-    draft.batchName = res.batchName
-    sessionStorage.setItem("foodLoggerDraft", JSON.stringify(draft))
-    draftSavedMsg.value = `تم حفظ المسودة (${res.batchName})`
-    setTimeout(() => (draftSavedMsg.value = ""), 3000)
-  } catch (e) {
-    alert(e.message)
-  } finally {
-    draftSaving.value = false
-  }
-}
-
-async function loadAll() {
-  productsLoading.value = true
-  try {
-    const [prods, rms] = await Promise.all([
-      call("losand.api.manufacture.get_allowed_products"),
-      call("losand.api.manufacture.get_raw_materials"),
-    ])
-    products.value = prods || []
-    availableMaterials.value = rms || []
-    if (products.value.length) {
-      const valid = products.value.some((p) => p.code === draft.product)
-      if (!valid) {
-        await selectProduct(products.value[0].code)
-      } else if (draft.variant && !draft.materials.length) {
-        await loadBom(draft.variant)
-      }
-    }
-  } finally {
-    productsLoading.value = false
-  }
-}
-
-// Live clock
 const liveTime = ref("")
 let timer = null
 function tick() {
@@ -165,431 +46,168 @@ function tick() {
   if (h === 0) h = 12
   liveTime.value = `${h}:${m} ${period}`
 }
-onMounted(() => {
+
+onMounted(async () => {
   tick()
   timer = setInterval(tick, 60000)
-  loadAll()
+  try {
+    const [finals, raws] = await Promise.all([
+      call("losand.api.manufacture.get_final_products", { category: draft.category }),
+      call("losand.api.manufacture.get_category_raw_materials", { category: draft.category, warehouse: draft.raw_warehouse }),
+    ])
+    if (!draft.finished_products.length) {
+      draft.finished_products = (finals || []).map((f) => ({ item_code: f.item_code, name: f.name, weight: f.weight, qty: 0 }))
+    }
+    if (!draft.raw_materials.length) {
+      draft.raw_materials = (raws || []).map((r) => ({ ...r, qty: 0 }))
+    }
+  } finally {
+    loading.value = false
+  }
 })
 onUnmounted(() => clearInterval(timer))
 </script>
 
 <template>
   <div class="font-cairo bg-warm text-text min-h-screen" dir="rtl">
-    <!-- Sticky Header -->
+    <!-- Header -->
     <header class="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
       <div class="bg-primary px-6 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-            <i class="fa-solid fa-industry text-white text-base"></i>
-          </div>
+          <div class="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center"><i class="fa-solid fa-industry text-white text-base"></i></div>
           <div>
             <p class="text-white/70 text-xs font-medium">نظام إدارة الإنتاج</p>
             <p class="text-white font-bold text-sm">{{ factoryName }}</p>
           </div>
         </div>
         <div class="flex items-center gap-4">
-          <div class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-1.5">
-            <i class="fa-regular fa-clock text-white/80 text-sm"></i>
-            <span class="text-white font-semibold text-sm">{{ liveTime }}</span>
-          </div>
-          <div class="w-9 h-9 rounded-full border-2 border-white/40 bg-white/20 flex items-center justify-center">
-            <i class="fa-solid fa-user text-white text-sm"></i>
-          </div>
+          <div class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-1.5"><i class="fa-regular fa-clock text-white/80 text-sm"></i><span class="text-white font-semibold text-sm">{{ liveTime }}</span></div>
           <button @click="logout" title="تسجيل الخروج" class="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 transition-colors rounded-xl px-3 py-1.5 text-white">
-            <i class="fa-solid fa-right-from-bracket text-sm"></i>
-            <span class="text-sm font-semibold hidden sm:inline">تسجيل الخروج</span>
+            <i class="fa-solid fa-right-from-bracket text-sm"></i><span class="text-sm font-semibold hidden sm:inline">تسجيل الخروج</span>
           </button>
         </div>
       </div>
-
-      <div class="px-6 py-4 bg-white">
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex-1">
-            <h1 class="text-xl font-bold text-text mb-1">تسجيل دُفعة إنتاج</h1>
-            <div class="flex items-center gap-4 flex-wrap">
-              <div class="flex items-center gap-1.5">
-                <span class="text-xs text-muted">رقم الدفعة:</span>
-                <span class="text-sm font-bold text-primary bg-primary-light px-2.5 py-0.5 rounded-lg">{{ draft.batchRef }}</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <i class="fa-regular fa-calendar text-muted text-xs"></i>
-                <span class="text-sm text-muted font-medium">{{ draft.dateLabel }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="flex flex-col items-end gap-2">
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-muted">العامل:</span>
-              <span class="text-sm font-bold text-text">{{ session.user }}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <button @click="draft.shift = 'morning'" :class="draft.shift === 'morning' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border">
-                <i class="fa-solid fa-sun text-xs"></i>
-                وردية صباحية
-              </button>
-              <button @click="draft.shift = 'evening'" :class="draft.shift === 'evening' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border">
-                <i class="fa-solid fa-moon text-xs"></i>
-                وردية مسائية
-              </button>
-            </div>
+      <div class="px-6 py-4 bg-white flex items-start justify-between gap-4">
+        <div>
+          <h1 class="text-xl font-bold text-text mb-1">تسجيل دُفعة إنتاج — {{ draft.category }}</h1>
+          <div class="flex items-center gap-4 flex-wrap text-sm">
+            <span><span class="text-muted">المحطة:</span> <span class="font-bold">{{ draft.workbench }}</span></span>
+            <span><span class="text-muted">الوردية:</span> <span class="font-bold">{{ draft.shift }}</span></span>
+            <span class="text-primary font-bold bg-primary-light px-2.5 py-0.5 rounded-lg">{{ draft.batchRef }}</span>
+            <span class="text-muted">{{ draft.dateLabel }}</span>
           </div>
         </div>
-      </div>
-
-      <div class="px-6 pb-3 bg-white">
-        <div class="flex items-center gap-2">
-          <div class="flex items-center gap-1.5">
-            <div class="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-              <i class="fa-solid fa-check text-white text-xs"></i>
-            </div>
-            <span class="text-xs font-semibold text-primary">الإدخال</span>
-          </div>
-          <div class="flex-1 h-1 bg-border rounded-full mx-1">
-            <div class="h-full bg-primary rounded-full w-1/3"></div>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <div class="w-6 h-6 bg-border rounded-full flex items-center justify-center">
-              <span class="text-xs font-bold text-muted">2</span>
-            </div>
-            <span class="text-xs font-medium text-muted">الملخص</span>
-          </div>
-          <div class="flex-1 h-1 bg-border rounded-full mx-1"></div>
-          <div class="flex items-center gap-1.5">
-            <div class="w-6 h-6 bg-border rounded-full flex items-center justify-center">
-              <span class="text-xs font-bold text-muted">3</span>
-            </div>
-            <span class="text-xs font-medium text-muted">التأكيد</span>
-          </div>
-        </div>
+        <button @click="router.push('/home')" class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center border border-border hover:bg-slate-200"><i class="fa-solid fa-arrow-right text-text"></i></button>
       </div>
     </header>
 
     <main class="px-4 md:px-6 py-6 pb-40 max-w-4xl mx-auto">
+      <div v-if="loading" class="text-center text-muted py-12"><i class="fa-solid fa-spinner fa-spin ml-2"></i> جارٍ التحميل...</div>
 
-      <!-- Block 1: Product Selector -->
-      <section class="mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-            <span class="text-white font-bold text-sm">1</span>
+      <template v-else>
+        <!-- Finished products -->
+        <section class="mb-6">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"><span class="text-white font-bold text-sm">1</span></div>
+            <h2 class="text-base font-bold">المنتجات النهائية</h2>
+            <div class="flex-1 h-px bg-border"></div>
+            <span class="text-xs text-muted">أدخل الكميات المنتجة</span>
           </div>
-          <h2 class="text-base font-bold text-text">اختر المنتج</h2>
-          <div class="flex-1 h-px bg-border"></div>
-          <span class="text-xs text-danger font-medium">* مطلوب</span>
-        </div>
-
-        <div v-if="productsLoading" class="text-center text-sm text-muted py-6">
-          <i class="fa-solid fa-spinner fa-spin ml-2"></i> جارٍ تحميل المنتجات...
-        </div>
-        <div v-else class="grid grid-cols-3 gap-3">
-          <div v-for="p in products" :key="p.code" @click="selectProduct(p.code)"
-            class="cursor-pointer rounded-2xl border-2 p-4 flex flex-col items-center gap-3 transition-all relative overflow-hidden"
-            :class="draft.product === p.code ? 'border-primary bg-primary-light' : 'border-border bg-white'">
-            <div v-if="draft.product === p.code" class="absolute top-2 left-2 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-              <i class="fa-solid fa-check text-white text-xs"></i>
+          <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+            <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted">
+              <div class="col-span-6">المنتج</div>
+              <div class="col-span-3 text-center">الوزن (جم)</div>
+              <div class="col-span-3 text-center">الكمية المنتجة</div>
             </div>
-            <div class="w-16 h-16 overflow-hidden rounded-xl flex items-center justify-center" :class="presentationFor(p.code).iconBg">
-              <img class="w-full h-full object-cover" :src="productImage(p)" :alt="p.name_ar" />
-            </div>
-            <div class="text-center">
-              <p class="font-bold text-text text-sm">{{ p.name_ar }}</p>
-              <p class="text-xs text-muted mt-0.5">{{ p.name_en }}</p>
-            </div>
-            <span class="text-xs font-bold px-2.5 py-1 rounded-full"
-              :class="draft.product === p.code ? 'bg-primary text-white' : 'bg-slate-100 text-muted font-medium'">
-              {{ draft.product === p.code ? "محدد" : "اختيار" }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Weight switcher -->
-        <div v-if="selectedProductObj" class="mt-3 flex items-center gap-2 flex-wrap">
-          <span class="text-xs font-bold text-muted">الوزن:</span>
-          <button v-for="v in selectedProductObj.variants" :key="v.variant" @click="selectWeight(v.variant)"
-            class="px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors"
-            :class="draft.variant === v.variant ? 'bg-primary text-white border-primary' : 'bg-white text-muted border-border hover:border-primary/40'">
-            {{ v.label }}
-          </button>
-        </div>
-      </section>
-
-      <!-- Block 2: Raw Materials Table (from BOM) -->
-      <section class="mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-            <span class="text-white font-bold text-sm">2</span>
-          </div>
-          <h2 class="text-base font-bold text-text">المواد الخام</h2>
-          <span class="text-xs text-muted">(من قائمة المواد BOM)</span>
-          <div class="flex-1 h-px bg-border"></div>
-          <div class="relative">
-            <button @click="showPicker = !showPicker" class="flex items-center gap-1.5 text-primary text-xs font-semibold bg-primary-light px-3 py-1.5 rounded-lg border border-primary/20 hover:bg-primary/10 transition-colors">
-              <i class="fa-solid fa-plus text-xs"></i>
-              إضافة مادة
-            </button>
-            <div v-if="showPicker" class="absolute left-0 mt-2 w-72 bg-white border border-border rounded-xl shadow-lg z-30 p-2 max-h-72 overflow-auto">
-              <p class="text-xs text-muted px-2 py-1 font-semibold">أصناف من ERPNext (Raw Material)</p>
-              <p v-if="!addableMaterials.length" class="text-xs text-muted text-center py-4">لا توجد مواد إضافية</p>
-              <button v-for="it in addableMaterials" :key="it.item_code" @click="addMaterial(it)"
-                class="w-full text-right px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center justify-between gap-2">
-                <span>
-                  <span class="block text-sm text-text font-semibold">{{ it.name_ar }}</span>
-                  <span class="block text-xs text-muted">{{ it.item_code }}</span>
-                </span>
-                <span class="text-xs font-bold text-primary whitespace-nowrap">{{ fmt(it.rate) }} {{ cur }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
-          <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3">
-            <div class="col-span-4 text-xs font-bold text-muted">المادة الخام</div>
-            <div class="col-span-2 text-xs font-bold text-muted text-center">الوحدة</div>
-            <div class="col-span-2 text-xs font-bold text-muted text-center">الكمية المخططة</div>
-            <div class="col-span-2 text-xs font-bold text-muted text-center">الكمية الفعلية</div>
-            <div class="col-span-2 text-xs font-bold text-muted text-center">التكلفة/وحدة</div>
-          </div>
-
-          <div v-if="bomLoading" class="px-4 py-8 text-center text-sm text-muted">
-            <i class="fa-solid fa-spinner fa-spin ml-2"></i> جارٍ تحميل مكوّنات المنتج...
-          </div>
-          <div v-else-if="!draft.materials.length" class="px-4 py-8 text-center text-sm text-muted">
-            لا توجد مكوّنات — اختر منتجًا أو أضف مادة.
-          </div>
-
-          <div v-for="(m, i) in draft.materials" :key="m.item_code || i"
-            class="grid grid-cols-12 px-4 py-3.5 items-center hover:bg-slate-50/50 transition-colors group"
-            :class="i < draft.materials.length - 1 ? 'border-b border-border' : ''">
-            <div class="col-span-4 flex items-center gap-2.5">
-              <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" :class="m.wrap">
-                <i class="fa-solid text-sm" :class="[m.icon, m.color]"></i>
-              </div>
-              <div>
-                <p class="text-sm font-semibold text-text">{{ m.name_ar }}</p>
-                <p class="text-xs text-muted">{{ m.name_en }}</p>
-                <p class="text-[11px] font-bold mt-0.5" :class="Number(m.actual) > Number(m.available || 0) || Number(m.available || 0) <= 0 ? 'text-danger' : 'text-success'">
-                  <i class="fa-solid fa-warehouse text-[10px] ml-1"></i>المتاح: {{ fmt1(m.available || 0) }} {{ m.unit }}
-                </p>
-              </div>
-            </div>
-            <div class="col-span-2 text-center">
-              <span class="bg-slate-100 text-slate-600 text-xs font-medium px-2 py-1 rounded-md">{{ m.unit }}</span>
-            </div>
-            <div class="col-span-2 text-center">
-              <span class="text-sm font-semibold text-text">{{ fmt1(m.perPiece * draft.producedQty) }}</span>
-            </div>
-            <div class="col-span-2 flex justify-center">
-              <input type="number" v-model.number="m.actual"
-                class="w-20 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none"
-                :class="Number(m.actual) > Number(m.available || 0) ? 'border-danger/60 bg-red-50 text-danger focus:border-danger' : (Number(m.actual) < (m.perPiece * draft.producedQty) ? 'border-warning/40 bg-amber-50 text-warning focus:border-warning' : 'border-primary/30 bg-primary-light text-primary focus:border-primary')" />
-            </div>
-            <div class="col-span-2 flex items-center justify-center gap-2">
-              <span class="text-sm font-semibold text-text">{{ fmt(m.rate) }} {{ cur }}</span>
-              <button @click="removeMaterial(i)" title="حذف المادة"
-                class="w-6 h-6 rounded-lg bg-slate-100 text-muted hover:bg-red-50 hover:text-danger flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                <i class="fa-solid fa-xmark text-xs"></i>
-              </button>
-            </div>
-          </div>
-
-          <div class="bg-slate-50 border-t-2 border-border px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <i class="fa-solid fa-circle-info text-muted text-sm"></i>
-              <span class="text-xs text-muted">{{ draft.materials.length }} مواد خام - {{ completed }} قيم مكتملة</span>
-            </div>
-            <span class="text-sm font-bold text-text">الإجمالي: <span class="text-primary">{{ fmt(totals.materialTotal) }} {{ cur }}</span></span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Block 3: Production Output -->
-      <section class="mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-            <span class="text-white font-bold text-sm">3</span>
-          </div>
-          <h2 class="text-base font-bold text-text">ناتج الإنتاج</h2>
-          <div class="flex-1 h-px bg-border"></div>
-          <div class="flex items-center gap-1.5 bg-green-50 text-success px-3 py-1 rounded-lg border border-green-200">
-            <i class="fa-solid fa-circle-check text-xs"></i>
-            <span class="text-xs font-semibold">الدفعة جارية</span>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-2xl border border-border shadow-sm overflow-hidden max-w-md">
-          <div class="px-4 py-3 flex items-center gap-2.5 border-b" :class="[presentation.headBg, presentation.headBorder]">
-            <div class="w-9 h-9 rounded-xl flex items-center justify-center" :class="presentation.iconBg">
-              <i class="fa-solid text-base" :class="[presentation.icon, presentation.iconText]"></i>
-            </div>
-            <div>
-              <p class="font-bold text-text text-sm">{{ draft.productName }}</p>
-              <p class="text-xs text-muted">{{ draft.weight }} جم / قطعة</p>
-            </div>
-          </div>
-          <div class="p-4 space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-xs text-muted font-medium">الكمية المنتجة (قطعة)</span>
-              <div class="flex items-center gap-2">
-                <button @click="adjustQty(-10)" class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
-                  <i class="fa-solid fa-minus text-xs text-muted"></i>
-                </button>
-                <input type="number" v-model.number="draft.producedQty" class="w-20 text-center text-lg font-bold border-2 border-border rounded-xl py-1 focus:outline-none focus:border-primary" />
-                <button @click="adjustQty(10)" class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <i class="fa-solid fa-plus text-xs text-white"></i>
-                </button>
-              </div>
-            </div>
-            <div class="bg-slate-50 rounded-xl p-3 flex items-center justify-between">
-              <span class="text-xs text-muted">الوزن للقطعة</span>
-              <span class="text-sm font-bold text-text">{{ draft.weight }} جم</span>
-            </div>
-            <div class="bg-slate-50 rounded-xl p-3 flex items-center justify-between">
-              <span class="text-xs text-muted">إجمالي الوزن</span>
-              <span class="text-sm font-bold text-text">{{ fmt1(totals.totalWeight) }} كجم</span>
-            </div>
-            <div class="bg-primary-light rounded-xl p-3 flex items-center justify-between border border-primary/20">
-              <span class="text-xs text-primary font-semibold">التكلفة / قطعة</span>
-              <span class="text-sm font-bold text-primary">{{ fmt(totals.unitCost) }} {{ cur }}</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Block 4: Waste and Loss -->
-      <section class="mb-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-            <span class="text-white font-bold text-sm">4</span>
-          </div>
-          <h2 class="text-base font-bold text-text">الهالك والفاقد</h2>
-          <div class="flex-1 h-px bg-border"></div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-            <div class="bg-red-50 border-b border-red-100 px-4 py-3 flex items-center justify-between">
-              <div class="flex items-center gap-2.5">
-                <div class="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center">
-                  <i class="fa-solid fa-trash-can text-red-500 text-base"></i>
-                </div>
-                <div>
-                  <p class="font-bold text-text text-sm">الهالك</p>
-                  <p class="text-xs text-muted">المنتج التالف الكلي</p>
-                </div>
-              </div>
-              <div class="bg-red-100 text-danger text-xs font-bold px-2.5 py-1 rounded-full">{{ totals.wasteUnits }} قطعة</div>
-            </div>
-            <div class="p-4 space-y-3">
-              <div class="space-y-2">
-                <div v-for="(w, i) in draft.waste" :key="i" class="flex items-center gap-3 p-2.5 bg-red-50/50 rounded-xl border border-red-100">
-                  <div class="w-2 h-2 bg-danger rounded-full flex-shrink-0"></div>
-                  <input v-model="w.reason" placeholder="السبب" class="text-sm text-text flex-1 bg-transparent focus:outline-none" />
-                  <input type="number" v-model.number="w.qty" class="w-16 text-center text-sm font-semibold border-2 border-red-200 bg-white rounded-lg py-1 focus:outline-none focus:border-danger" />
-                  <span class="text-xs text-muted w-8">{{ w.unit }}</span>
-                  <button @click="draft.waste.splice(i, 1)" class="w-7 h-7 bg-red-100 rounded-lg flex items-center justify-center">
-                    <i class="fa-solid fa-xmark text-danger text-xs"></i>
-                  </button>
-                </div>
-              </div>
-              <button @click="addWaste" class="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-red-200 rounded-xl text-danger text-sm font-semibold hover:bg-red-50 transition-colors">
-                <i class="fa-solid fa-plus text-xs"></i>
-                إضافة هالك
-              </button>
-              <div class="bg-red-50 rounded-xl p-3 flex items-center justify-between border border-red-100">
-                <span class="text-xs text-danger font-semibold">إجمالي الهالك</span>
-                <span class="text-base font-bold text-danger">{{ totals.wasteUnits }} قطعة / {{ fmt(totals.wasteTotal) }} {{ cur }}</span>
+            <div v-for="(f, i) in draft.finished_products" :key="f.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < draft.finished_products.length - 1 ? 'border-b border-border' : ''">
+              <div class="col-span-6 font-semibold text-sm">{{ f.name }}</div>
+              <div class="col-span-3 text-center text-sm text-muted">{{ f.weight }}</div>
+              <div class="col-span-3 flex justify-center">
+                <input type="number" min="0" v-model.number="f.qty" class="w-24 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none" :class="Number(f.qty) > 0 ? 'border-primary/40 bg-primary-light text-primary focus:border-primary' : 'border-border'" />
               </div>
             </div>
           </div>
+        </section>
 
-          <div class="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-            <div class="bg-amber-50 border-b border-amber-100 px-4 py-3 flex items-center justify-between">
-              <div class="flex items-center gap-2.5">
-                <div class="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center">
-                  <i class="fa-solid fa-arrow-trend-down text-amber-500 text-base"></i>
-                </div>
-                <div>
-                  <p class="font-bold text-text text-sm">الفاقد</p>
-                  <p class="text-xs text-muted">الفقد في العملية</p>
-                </div>
-              </div>
-              <div class="bg-amber-100 text-warning text-xs font-bold px-2.5 py-1 rounded-full">{{ fmt1(totals.lossUnits) }} كجم</div>
+        <!-- Raw materials -->
+        <section class="mb-6">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"><span class="text-white font-bold text-sm">2</span></div>
+            <h2 class="text-base font-bold">المواد الخام المستهلكة</h2>
+            <div class="flex-1 h-px bg-border"></div>
+          </div>
+          <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+            <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted">
+              <div class="col-span-5">المادة الخام</div>
+              <div class="col-span-2 text-center">الوحدة</div>
+              <div class="col-span-3 text-center">الكمية المستهلكة</div>
+              <div class="col-span-2 text-center">التكلفة/وحدة</div>
             </div>
-            <div class="p-4 space-y-3">
-              <div class="space-y-2">
-                <div v-for="(l, i) in draft.loss" :key="i" class="flex items-center gap-3 p-2.5 bg-amber-50/50 rounded-xl border border-amber-100">
-                  <div class="w-2 h-2 bg-warning rounded-full flex-shrink-0"></div>
-                  <input v-model="l.reason" placeholder="السبب" class="text-sm text-text flex-1 bg-transparent focus:outline-none" />
-                  <input type="number" step="0.1" v-model.number="l.qty" class="w-16 text-center text-sm font-semibold border-2 border-amber-200 bg-white rounded-lg py-1 focus:outline-none focus:border-warning" />
-                  <span class="text-xs text-muted w-8">{{ l.unit }}</span>
-                  <button @click="draft.loss.splice(i, 1)" class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
-                    <i class="fa-solid fa-xmark text-warning text-xs"></i>
-                  </button>
-                </div>
+            <div v-for="(m, i) in draft.raw_materials" :key="m.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < draft.raw_materials.length - 1 ? 'border-b border-border' : ''">
+              <div class="col-span-5">
+                <p class="font-semibold text-sm">{{ m.name_ar }}</p>
+                <p class="text-[11px] font-bold mt-0.5" :class="Number(m.qty) > Number(m.available || 0) || Number(m.available || 0) <= 0 ? 'text-danger' : 'text-success'"><i class="fa-solid fa-warehouse text-[10px] ml-1"></i>المتاح: {{ fmt1(m.available || 0) }} {{ m.unit }}</p>
               </div>
-              <button @click="addLoss" class="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-amber-200 rounded-xl text-warning text-sm font-semibold hover:bg-amber-50 transition-colors">
-                <i class="fa-solid fa-plus text-xs"></i>
-                إضافة فاقد
-              </button>
-              <div class="bg-amber-50 rounded-xl p-3 flex items-center justify-between border border-amber-100">
-                <span class="text-xs text-warning font-semibold">إجمالي الفاقد</span>
-                <span class="text-base font-bold text-warning">{{ fmt1(totals.lossUnits) }} كجم / {{ fmt(totals.lossTotal) }} {{ cur }}</span>
+              <div class="col-span-2 text-center"><span class="bg-slate-100 text-slate-600 text-xs font-medium px-2 py-1 rounded-md">{{ m.unit }}</span></div>
+              <div class="col-span-3 flex justify-center">
+                <input type="number" min="0" v-model.number="m.qty" class="w-24 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none" :class="Number(m.qty) > Number(m.available || 0) ? 'border-danger/60 bg-red-50 text-danger focus:border-danger' : 'border-border focus:border-primary'" />
               </div>
+              <div class="col-span-2 text-center text-sm font-semibold">{{ fmt(m.rate) }} {{ cur }}</div>
+            </div>
+            <div class="bg-slate-50 border-t-2 border-border px-4 py-3 flex items-center justify-between">
+              <span class="text-xs text-muted">إجمالي تكلفة المواد (C)</span>
+              <span class="text-sm font-bold text-primary">{{ fmt(totals.C) }} {{ cur }}</span>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="mt-4 bg-white rounded-2xl border border-border shadow-sm p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <i class="fa-regular fa-note-sticky text-muted text-sm"></i>
-            <label class="text-sm font-semibold text-text">ملاحظات الوردية</label>
-            <span class="text-xs text-muted">(اختياري)</span>
+        <!-- Loss -->
+        <section class="mb-6">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"><span class="text-white font-bold text-sm">3</span></div>
+            <h2 class="text-base font-bold">الفاقد <span class="text-xs text-muted font-normal">(اختياري)</span></h2>
+            <div class="flex-1 h-px bg-border"></div>
           </div>
-          <textarea v-model="draft.notes" rows="3" placeholder="أضف أي ملاحظات أو مشاكل واجهتها خلال هذه الوردية..." class="w-full text-sm text-text border-2 border-border rounded-xl p-3 focus:outline-none focus:border-primary resize-none placeholder-slate-400 font-cairo"></textarea>
-        </div>
-      </section>
+          <div class="bg-white rounded-2xl border border-border shadow-sm p-4 space-y-2">
+            <div v-for="(l, i) in draft.losses" :key="i" class="flex items-center gap-3 p-2.5 bg-amber-50/50 rounded-xl border border-amber-100">
+              <input v-model="l.reason" placeholder="السبب" class="text-sm flex-1 bg-transparent focus:outline-none" />
+              <input type="number" step="0.1" v-model.number="l.qty" class="w-20 text-center text-sm font-semibold border-2 border-amber-200 bg-white rounded-lg py-1 focus:outline-none focus:border-warning" />
+              <span class="text-xs text-muted w-8">كجم</span>
+              <button @click="draft.losses.splice(i, 1)" class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-xmark text-warning text-xs"></i></button>
+            </div>
+            <button @click="addLoss" class="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-amber-200 rounded-xl text-warning text-sm font-semibold hover:bg-amber-50"><i class="fa-solid fa-plus text-xs"></i> إضافة فاقد</button>
+          </div>
+        </section>
+
+        <!-- Notes -->
+        <section class="mb-6">
+          <div class="bg-white rounded-2xl border border-border shadow-sm p-4">
+            <label class="text-sm font-semibold mb-2 block">ملاحظات</label>
+            <textarea v-model="draft.notes" rows="2" class="w-full text-sm border-2 border-border rounded-xl p-3 focus:outline-none focus:border-primary resize-none font-cairo"></textarea>
+          </div>
+        </section>
+      </template>
     </main>
 
-    <!-- Sticky Footer -->
+    <!-- Footer -->
     <footer class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-border shadow-lg">
       <div class="max-w-4xl mx-auto px-4 md:px-6 py-3">
-        <div class="flex items-center gap-4 mb-3">
+        <div class="flex items-center gap-3 mb-3">
           <div class="flex-1 grid grid-cols-3 gap-3">
-            <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border">
-              <p class="text-xs text-muted mb-0.5">تكلفة المواد</p>
-              <p class="text-sm font-bold text-text">{{ fmt(totals.materialTotal) }} {{ cur }}</p>
-            </div>
-            <div class="bg-red-50 rounded-xl px-3 py-2 text-center border border-red-100">
-              <p class="text-xs text-danger mb-0.5">الهالك والفاقد</p>
-              <p class="text-sm font-bold text-danger">{{ fmt(totals.wasteLossTotal) }} {{ cur }}</p>
-            </div>
-            <div class="bg-primary-light rounded-xl px-3 py-2 text-center border border-primary/20">
-              <p class="text-xs text-primary mb-0.5">التكلفة الإجمالية</p>
-              <p class="text-sm font-bold text-primary">{{ fmt(totals.totalCost) }} {{ cur }}</p>
-            </div>
+            <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border"><p class="text-xs text-muted mb-0.5">تكلفة المواد (C)</p><p class="text-sm font-bold">{{ fmt(totals.C) }} {{ cur }}</p></div>
+            <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border"><p class="text-xs text-muted mb-0.5">إجمالي الوزن</p><p class="text-sm font-bold">{{ fmt1(totals.W) }} جم</p></div>
+            <div class="bg-primary-light rounded-xl px-3 py-2 text-center border border-primary/20"><p class="text-xs text-primary mb-0.5">القطع المنتجة</p><p class="text-sm font-bold text-primary">{{ totals.totalPieces }}</p></div>
           </div>
         </div>
         <div v-if="!canContinue" class="mb-2 flex items-center gap-2 text-xs font-bold text-danger bg-red-50 border border-red-100 rounded-lg px-3 py-2">
           <i class="fa-solid fa-triangle-exclamation"></i>
-          <span v-if="stockIssues.length">كمية تتجاوز المتاح في المخزون: {{ stockIssues.map((m) => m.name_ar).join("، ") }}</span>
-          <span v-else-if="!draft.variant">اختر المنتج للمتابعة</span>
-          <span v-else>أدخل كمية إنتاج أكبر من صفر للمتابعة</span>
+          <span v-if="stockIssues.length">كمية تتجاوز المتاح: {{ stockIssues.map((m) => m.name_ar).join("، ") }}</span>
+          <span v-else-if="!producedAny">أدخل كمية منتج نهائي واحد على الأقل</span>
+          <span v-else>أدخل كمية مادة خام مستهلكة واحدة على الأقل</span>
         </div>
-        <div v-if="draftSavedMsg" class="mb-2 flex items-center gap-2 text-xs font-bold text-success bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-          <i class="fa-solid fa-circle-check"></i>
-          <span>{{ draftSavedMsg }}</span>
-        </div>
-        <div class="flex items-center gap-3">
-          <button @click="saveDraft" :disabled="draftSaving" class="flex items-center gap-2 px-5 py-3 bg-slate-100 text-muted rounded-xl text-sm font-semibold border border-border hover:bg-slate-200 transition-colors min-h-[44px] disabled:opacity-50">
-            <i class="text-sm" :class="draftSaving ? 'fa-solid fa-spinner fa-spin' : 'fa-regular fa-floppy-disk'"></i>
-            {{ draftSaving ? "جارٍ الحفظ..." : "حفظ مسودة" }}
-          </button>
-          <button @click="continueToSummary" :disabled="!canContinue" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors min-h-[44px] shadow-md shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary">
-            <i class="fa-solid fa-calculator text-base"></i>
-            احسب التكلفة وراجع الملخص
-            <i class="fa-solid fa-arrow-left text-sm"></i>
-          </button>
-        </div>
+        <button @click="continueToSummary" :disabled="!canContinue" class="w-full flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <i class="fa-solid fa-calculator"></i> احسب التكلفة وراجع الملخص <i class="fa-solid fa-arrow-left text-sm"></i>
+        </button>
       </div>
     </footer>
   </div>
