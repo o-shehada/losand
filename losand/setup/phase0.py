@@ -185,6 +185,44 @@ def _disable_legacy():
 		frappe.db.set_value("Item", it, "disabled", 1)
 
 
+OPENING_QTY = {
+	"Chicken Mince": 1000,
+	"Beef Mince": 1000,
+	"Fresh Eggs": 5000,
+	"Spices": 50000,
+	"Vegetable Oil": 500,
+	"Bread Crumbs": 500,
+	"Flour": 1000,
+	"Tomato": 500,
+}
+
+
+def add_opening_stock():
+	"""Opening stock (Material Receipt) for the new batch-tracked raw items.
+	Auto-creates a batch per item (items have create_new_batch + series).
+	Idempotent: only adds for raw items that currently have zero stock in the RM warehouse."""
+	rm_wh = WAREHOUSES[0]
+	se = frappe.new_doc("Stock Entry")
+	se.stock_entry_type = "Material Receipt"
+	se.company = COMPANY
+	se.to_warehouse = rm_wh
+	added = []
+	for code, uom, rate, cats in RAW_MATERIALS:
+		on_hand = frappe.db.get_value("Bin", {"item_code": code, "warehouse": rm_wh}, "actual_qty") or 0
+		if on_hand > 0:
+			continue
+		se.append("items", {"item_code": code, "qty": OPENING_QTY.get(code, 100), "basic_rate": rate, "t_warehouse": rm_wh})
+		added.append(code)
+	if not added:
+		print("OPENING_STOCK_SKIPPED (already stocked)")
+		return None
+	se.insert(ignore_permissions=True)
+	se.submit()
+	frappe.db.commit()
+	print("OPENING_STOCK_DONE", se.name, frappe.as_json(added))
+	return se.name
+
+
 def run():
 	_ensure_custom_fields()
 	clearing = _ensure_clearing_account()
