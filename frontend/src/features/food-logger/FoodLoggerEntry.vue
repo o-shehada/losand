@@ -55,11 +55,28 @@ onMounted(async () => {
       call("losand.api.manufacture.get_final_products", { category: draft.category }),
       call("losand.api.manufacture.get_category_raw_materials", { category: draft.category, warehouse: draft.raw_warehouse }),
     ])
+    // Finished products: seed if empty, else refresh weight (keep qty)
+    const fMap = Object.fromEntries((finals || []).map((f) => [f.item_code, f]))
     if (!draft.finished_products.length) {
       draft.finished_products = (finals || []).map((f) => ({ item_code: f.item_code, name: f.name, weight: f.weight, qty: 0 }))
+    } else {
+      draft.finished_products.forEach((p) => {
+        const f = fMap[p.item_code]
+        if (f) { p.weight = f.weight; p.name = f.name }
+      })
     }
+    // Raw materials: seed if empty, else refresh live available/rate (keep entered qty)
+    const rMap = Object.fromEntries((raws || []).map((r) => [r.item_code, r]))
     if (!draft.raw_materials.length) {
       draft.raw_materials = (raws || []).map((r) => ({ ...r, qty: 0 }))
+    } else {
+      draft.raw_materials.forEach((m) => {
+        const r = rMap[m.item_code]
+        if (r) { m.available = r.available_qty; m.rate = r.rate; m.unit = r.unit; m.name_ar = r.name_ar }
+      })
+      ;(raws || []).forEach((r) => {
+        if (!draft.raw_materials.some((m) => m.item_code === r.item_code)) draft.raw_materials.push({ ...r, qty: 0 })
+      })
     }
   } finally {
     loading.value = false
@@ -138,21 +155,23 @@ onUnmounted(() => clearInterval(timer))
           </div>
           <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
             <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted">
-              <div class="col-span-5">المادة الخام</div>
-              <div class="col-span-2 text-center">الوحدة</div>
+              <div class="col-span-4">المادة الخام</div>
+              <div class="col-span-1 text-center">الوحدة</div>
               <div class="col-span-3 text-center">الكمية المستهلكة</div>
               <div class="col-span-2 text-center">التكلفة/وحدة</div>
+              <div class="col-span-2 text-center">الإجمالي</div>
             </div>
             <div v-for="(m, i) in draft.raw_materials" :key="m.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < draft.raw_materials.length - 1 ? 'border-b border-border' : ''">
-              <div class="col-span-5">
+              <div class="col-span-4">
                 <p class="font-semibold text-sm">{{ m.name_ar }}</p>
                 <p class="text-[11px] font-bold mt-0.5" :class="Number(m.qty) > Number(m.available || 0) || Number(m.available || 0) <= 0 ? 'text-danger' : 'text-success'"><i class="fa-solid fa-warehouse text-[10px] ml-1"></i>المتاح: {{ fmt1(m.available || 0) }} {{ m.unit }}</p>
               </div>
-              <div class="col-span-2 text-center"><span class="bg-slate-100 text-slate-600 text-xs font-medium px-2 py-1 rounded-md">{{ m.unit }}</span></div>
+              <div class="col-span-1 text-center"><span class="bg-slate-100 text-slate-600 text-xs font-medium px-2 py-1 rounded-md">{{ m.unit }}</span></div>
               <div class="col-span-3 flex justify-center">
                 <input type="number" min="0" v-model.number="m.qty" class="w-24 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none" :class="Number(m.qty) > Number(m.available || 0) ? 'border-danger/60 bg-red-50 text-danger focus:border-danger' : 'border-border focus:border-primary'" />
               </div>
               <div class="col-span-2 text-center text-sm font-semibold">{{ fmt(m.rate) }} {{ cur }}</div>
+              <div class="col-span-2 text-center text-sm font-bold">{{ fmt((Number(m.qty) || 0) * (Number(m.rate) || 0)) }} {{ cur }}</div>
             </div>
             <div class="bg-slate-50 border-t-2 border-border px-4 py-3 flex items-center justify-between">
               <span class="text-xs text-muted">إجمالي تكلفة المواد (C)</span>
