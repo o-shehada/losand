@@ -13,7 +13,8 @@ DEFAULT_FACTORY_NAME = "مصنع الغذاء الحديث"
 
 
 def cfg():
-	"""Resolved manufacturing config from the Settings single, with safe fallbacks."""
+	"""Resolved config from the Settings single, with safe fallbacks. Warehouses now come
+	from the Workbench; the settings warehouses are only fallbacks."""
 	s = frappe.get_cached_doc("Los Andalus Manufacture Settings")
 	company = s.company or frappe.defaults.get_global_default("company") or DEFAULT_COMPANY
 	return frappe._dict(
@@ -23,6 +24,7 @@ def cfg():
 		fg=s.fg_warehouse or DEFAULT_FG_WAREHOUSE,
 		raw_group=s.raw_material_group or DEFAULT_RAW_MATERIAL_GROUP,
 		factory_name=s.factory_name or DEFAULT_FACTORY_NAME,
+		clearing=s.production_clearing_account,
 	)
 
 
@@ -54,65 +56,7 @@ def get_current_session():
 	}
 
 
-@frappe.whitelist()
-def get_raw_materials(search: str | None = None):
-	"""Return ERPNext Items under the Raw Material group (and its sub-groups),
-	mapped to the shape the Food Logger frontend expects."""
-	import html
-
-	from frappe.utils.nestedset import get_descendants_of
-
-	rm_group = cfg().raw_group
-	groups = [rm_group]
-	try:
-		groups += get_descendants_of("Item Group", rm_group)
-	except Exception:
-		pass
-
-	filters = {"item_group": ["in", groups], "disabled": 0}
-	or_filters = None
-	if search:
-		or_filters = {"item_name": ["like", f"%{search}%"], "item_code": ["like", f"%{search}%"]}
-
-	items = frappe.get_all(
-		"Item",
-		filters=filters,
-		or_filters=or_filters,
-		fields=[
-			"item_code",
-			"item_name",
-			"description",
-			"stock_uom",
-			"valuation_rate",
-			"last_purchase_rate",
-			"standard_rate",
-		],
-		order_by="item_name asc",
-		limit_page_length=200,
-	)
-
-	# Available stock per item in the source warehouse.
-	codes = [it.get("item_code") for it in items]
-	qty_map = _stock_map(codes)
-
-	result = []
-	for it in items:
-		rate = it.get("valuation_rate") or it.get("last_purchase_rate") or it.get("standard_rate") or 0
-		result.append(
-			{
-				"item_code": it.get("item_code"),
-				"name_ar": it.get("item_name") or it.get("item_code"),
-				"name_en": html.unescape(frappe.utils.strip_html(it.get("description") or "")).strip(),
-				"unit": it.get("stock_uom"),
-				"rate": float(rate),
-				"available_qty": float(qty_map.get(it.get("item_code"), 0)),
-			}
-		)
-	return result
-
-
-def _stock_map(codes, warehouse=None):
-	warehouse = warehouse or cfg().source
+def _stock_map(codes, warehouse):
 	qty_map = {}
 	if codes:
 		for b in frappe.get_all(
@@ -124,335 +68,183 @@ def _stock_map(codes, warehouse=None):
 	return qty_map
 
 
+# ---------------------------------------------------------------------------
+# Phase 1 — read APIs
+# ---------------------------------------------------------------------------
 @frappe.whitelist()
-def get_allowed_products():
-	"""Final-product templates the user may produce, each with its weight variants
-	and the flagged default variant. (Role filtering comes in Phase 2.)"""
-	templates = frappe.get_all(
-		"Item", filters={"has_variants": 1, "disabled": 0}, fields=["item_code", "item_name", "image"]
-	)
+def get_workbenches():
+	"""Enabled workbenches the user can produce at: category + 3 warehouses + shifts."""
 	result = []
-	for t in templates:
-		variants = frappe.get_all(
-			"Item",
-			filters={"variant_of": t.item_code, "disabled": 0},
-			fields=["item_code", "weight_per_unit", "custom_is_default_variant", "image"],
-			order_by="weight_per_unit asc",
-		)
-		if not variants:
-			continue
-		default = next((v for v in variants if v.custom_is_default_variant), variants[0])
+	for w in frappe.get_all("Workbench", filters={"disabled": 0}, order_by="workbench_name", pluck="name"):
+		wb = frappe.get_cached_doc("Workbench", w)
+		shifts = sorted({r.shift for r in wb.staff if r.shift} | {r.shift for r in wb.workers if r.shift})
+		if not shifts:
+			shifts = frappe.get_all("Shift", pluck="name")
 		result.append(
 			{
-				"code": t.item_code,
-				"name_ar": t.item_name,
-				"name_en": t.item_code,
-				"image": t.image or default.get("image"),
-				"default_variant": default.item_code,
-				"default_weight": default.weight_per_unit,
-				"variants": [
-					{
-						"variant": v.item_code,
-						"weight": v.weight_per_unit,
-						"label": f"{int(v.weight_per_unit or 0)} جم",
-					}
-					for v in variants
-				],
+				"name": wb.name,
+				"category": wb.product_category,
+				"raw_warehouse": wb.raw_material_warehouse,
+				"mfg_warehouse": wb.manufacturing_warehouse,
+				"fg_warehouse": wb.fg_warehouse,
+				"shifts": shifts,
 			}
 		)
 	return result
 
 
 @frappe.whitelist()
-def get_variant_bom(variant: str):
-	"""Planned per-piece materials for a product variant, from its default BOM,
-	enriched with current unit cost and available stock."""
+def get_final_products(category):
+	"""Independent final-product items for a category (per weight)."""
+	items = frappe.get_all(
+		"Item",
+		filters={"is_final_product": 1, "product_category": category, "disabled": 0},
+		fields=["item_code", "item_name", "weight_per_unit", "weight_uom", "image", "valuation_rate"],
+		order_by="weight_per_unit asc",
+	)
+	return [
+		{
+			"item_code": i.item_code,
+			"name": i.item_name,
+			"weight": float(i.weight_per_unit or 0),
+			"weight_uom": i.weight_uom,
+			"image": i.image,
+			"rate": float(i.valuation_rate or 0),
+		}
+		for i in items
+	]
+
+
+@frappe.whitelist()
+def get_category_raw_materials(category, warehouse=None):
+	"""Raw materials whose classification includes the category, with valuation + stock."""
 	import html
 
-	weight = frappe.db.get_value("Item", variant, "weight_per_unit")
-	bom_name = frappe.db.get_value("Item", variant, "default_bom") or frappe.db.get_value(
-		"BOM", {"item": variant, "is_active": 1, "is_default": 1}, "name"
+	warehouse = warehouse or cfg().source
+	items = frappe.get_all(
+		"Item",
+		filters=[
+			["is_raw_material", "=", 1],
+			["disabled", "=", 0],
+			["Los Andalus Item Category", "product_category", "=", category],
+		],
+		fields=["item_code", "item_name", "description", "stock_uom", "valuation_rate"],
+		order_by="item_name asc",
 	)
-
-	materials = []
-	unit_cost = 0.0
-	loss_rate = 0.0
-	if bom_name:
-		bom = frappe.get_doc("BOM", bom_name)
-		base = bom.quantity or 1
-		unit_cost = float(bom.total_cost or 0) / base
-		codes = [d.item_code for d in bom.items]
-		details = {
-			d.name: d
-			for d in frappe.get_all(
-				"Item",
-				filters={"item_code": ["in", codes]},
-				fields=["item_code as name", "item_name", "description", "stock_uom", "valuation_rate"],
-			)
-		}
-		qty_map = _stock_map(codes)
-		for d in bom.items:
-			info = details.get(d.item_code, frappe._dict())
-			materials.append(
-				{
-					"item_code": d.item_code,
-					"name_ar": info.get("item_name") or d.item_code,
-					"name_en": html.unescape(frappe.utils.strip_html(info.get("description") or "")).strip(),
-					"unit": d.uom or info.get("stock_uom"),
-					"per_piece": (d.qty or 0) / base,
-					"rate": float(info.get("valuation_rate") or d.rate or 0),
-					"available_qty": float(qty_map.get(d.item_code, 0)),
-				}
-			)
-		# Loss (process kg loss) cost proxy = the costliest material's rate per its unit.
-		loss_rate = max((m["rate"] for m in materials), default=0.0)
-
-	return {
-		"variant": variant,
-		"weight": weight,
-		"bom": bom_name,
-		"materials": materials,
-		"unit_cost": unit_cost,
-		"loss_rate": loss_rate,
-	}
-
-
-def _fill_batch_children(batch, draft):
-	"""Populate the batch's materials/waste/loss child tables from a draft."""
-	qty = float(draft.get("producedQty") or 0)
-	batch.set("materials", [])
-	for m in draft.get("materials") or []:
-		actual = float(m.get("actual") or 0)
-		rate = float(m.get("rate") or 0)
-		batch.append(
-			"materials",
-			{
-				"item_code": m.get("item_code"),
-				"item_name": m.get("name_ar") or m.get("item_code"),
-				"unit": m.get("unit"),
-				"planned": float(m.get("perPiece") or 0) * qty,
-				"actual": actual,
-				"rate": rate,
-				"amount": actual * rate,
-			},
-		)
-	batch.set("waste_items", [])
-	for w in draft.get("waste") or []:
-		q = float(w.get("qty") or 0)
-		rate = float(w.get("rate") or 0)
-		batch.append("waste_items", {"reason": w.get("reason"), "qty": q, "unit": w.get("unit"), "rate": rate, "amount": q * rate})
-	batch.set("loss_items", [])
-	for l in draft.get("loss") or []:
-		q = float(l.get("qty") or 0)
-		rate = float(l.get("rate") or 0)
-		batch.append("loss_items", {"reason": l.get("reason"), "qty": q, "unit": l.get("unit"), "rate": rate, "amount": q * rate})
-
-
-@frappe.whitelist()
-def submit_batch(draft, totals=None):
-	"""Phase-2: turn a Food Logger draft into real ERPNext production documents.
-
-	Creates (and submits): Work Order -> Material Transfer for Manufacture (actual qty)
-	-> Manufacture Stock Entry, all tied together by a Los Andalus Production Batch log.
-	Returns the batch confirmation with ERPNext's authoritative per-piece cost.
-	"""
-	import json
-
-	from erpnext.manufacturing.doctype.work_order.work_order import make_stock_entry
-
-	if isinstance(draft, str):
-		draft = json.loads(draft)
-	if isinstance(totals, str):
-		totals = json.loads(totals or "{}")
-
-	if frappe.session.user == "Guest":
-		frappe.throw(_("Login required"), frappe.PermissionError)
-	if not can_produce():
-		frappe.throw(
-			_("You do not have permission to produce. Manufacture Supervisor role required."),
-			frappe.PermissionError,
-		)
-
-	variant = draft.get("variant")
-	qty = float(draft.get("producedQty") or 0)
-	materials = draft.get("materials") or []
-
-	if not variant:
-		frappe.throw(_("Select a product variant first"))
-	if qty <= 0:
-		frappe.throw(_("Produced quantity must be greater than zero"))
-
-	bom_no = frappe.db.get_value("Item", variant, "default_bom")
-	if not bom_no:
-		frappe.throw(_("No active BOM found for {0}").format(variant))
-
-	c = cfg()
-
-	# Stock guard (defence in depth; UI also blocks this)
-	for m in materials:
-		actual = float(m.get("actual") or 0)
-		if actual <= 0:
-			continue
-		on_hand = frappe.db.get_value("Bin", {"item_code": m.get("item_code"), "warehouse": c.source}, "actual_qty") or 0
-		if actual > on_hand:
-			frappe.throw(
-				_("Not enough stock of {0}: need {1}, available {2}").format(m.get("name_ar") or m.get("item_code"), actual, on_hand)
-			)
-
-	batch = frappe.new_doc("Los Andalus Production Batch")
-	batch.update(
+	codes = [i.item_code for i in items]
+	qty_map = _stock_map(codes, warehouse)
+	return [
 		{
-			"product": draft.get("product"),
-			"product_name": draft.get("productName"),
-			"variant": variant,
-			"bom": bom_no,
-			"batch_reference": draft.get("batchRef"),
-			"produced_qty": qty,
-			"weight": draft.get("weight") or 0,
-			"source_warehouse": c.source,
-			"wip_warehouse": c.wip,
-			"target_warehouse": c.fg,
-			"operator": frappe.session.user,
-			"status": "Draft",
-			"notes": draft.get("notes"),
+			"item_code": i.item_code,
+			"name_ar": i.item_name,
+			"name_en": html.unescape(frappe.utils.strip_html(i.description or "")).strip(),
+			"unit": i.stock_uom,
+			"rate": float(i.valuation_rate or 0),
+			"available_qty": float(qty_map.get(i.item_code, 0)),
 		}
-	)
-	_fill_batch_children(batch, draft)
-	batch.insert(ignore_permissions=True)
+		for i in items
+	]
 
-	try:
-		# 1) Work Order
-		wo = frappe.new_doc("Work Order")
-		wo.update(
-			{
-				"production_item": variant,
-				"bom_no": bom_no,
-				"qty": qty,
-				"company": c.company,
-				"source_warehouse": c.source,
-				"wip_warehouse": c.wip,
-				"fg_warehouse": c.fg,
-			}
-		)
-		wo.insert(ignore_permissions=True)
-		wo.submit()
-		frappe.db.set_value("Work Order", wo.name, "custom_production_batch", batch.name)
-		batch.db_set("work_order", wo.name)
-		batch.db_set("status", "WO Created")
 
-		# 2) Material Transfer for Manufacture, overridden with ACTUAL consumption
-		actual_map = {m.get("item_code"): float(m.get("actual") or 0) for m in materials}
-		transfer = frappe.get_doc(make_stock_entry(wo.name, "Material Transfer for Manufacture", qty))
-		kept = []
-		for it in transfer.items:
-			a = actual_map.get(it.item_code)
-			if a is None or a <= 0:
-				continue
-			it.qty = a
-			kept.append(it)
-		transfer.items = kept
-		bom_codes = {it.item_code for it in transfer.items}
-		for code, a in actual_map.items():
-			if a > 0 and code not in bom_codes:
-				transfer.append("items", {"item_code": code, "qty": a, "s_warehouse": c.source, "t_warehouse": c.wip})
-		transfer.insert(ignore_permissions=True)
-		transfer.submit()
-		frappe.db.set_value("Stock Entry", transfer.name, "custom_production_batch", batch.name)
-		batch.db_set("material_transfer_entry", transfer.name)
-		batch.db_set("status", "Materials Transferred")
+# ---------------------------------------------------------------------------
+# Batch persistence (draft). Real stock posting is Phase 2 (submit_batch).
+# ---------------------------------------------------------------------------
+def _compute_and_fill(batch, payload):
+	"""Fill outputs/materials/losses child tables + compute C, W, and weight-allocated cost."""
+	# Raw materials consumed → C
+	total_raw_cost = 0.0
+	batch.set("materials", [])
+	for m in payload.get("raw_materials") or []:
+		code = m.get("item_code")
+		qty = float(m.get("qty") if m.get("qty") is not None else m.get("actual") or 0)
+		if not code or qty <= 0:
+			continue
+		info = frappe.db.get_value("Item", code, ["item_name", "stock_uom", "valuation_rate"], as_dict=True) or {}
+		rate = float(m.get("rate") if m.get("rate") is not None else info.get("valuation_rate") or 0)
+		amount = qty * rate
+		total_raw_cost += amount
+		batch.append("materials", {"item_code": code, "item_name": info.get("item_name"), "unit": info.get("stock_uom"), "qty": qty, "rate": rate, "amount": amount})
 
-		# 3) Manufacture (consumes transferred from WIP, receives FG; ERPNext costs it)
-		manufacture = frappe.get_doc(make_stock_entry(wo.name, "Manufacture", qty))
-		manufacture.insert(ignore_permissions=True)
-		manufacture.submit()
-		frappe.db.set_value("Stock Entry", manufacture.name, "custom_production_batch", batch.name)
-		batch.db_set("manufacture_entry", manufacture.name)
+	# Finished products → total output weight W
+	outputs = []
+	total_weight = 0.0
+	for f in payload.get("finished_products") or []:
+		code = f.get("item_code")
+		qty = float(f.get("qty") or 0)
+		if not code or qty <= 0:
+			continue
+		info = frappe.db.get_value("Item", code, ["item_name", "weight_per_unit"], as_dict=True) or {}
+		weight = float(f.get("weight") if f.get("weight") is not None else info.get("weight_per_unit") or 0)
+		total_weight += qty * weight
+		outputs.append((code, info.get("item_name"), qty, weight))
 
-		# ERPNext-computed finished-good valuation = authoritative per-piece cost
-		unit_cost = 0.0
-		for it in manufacture.items:
-			if it.is_finished_item or (it.t_warehouse and it.item_code == variant):
-				unit_cost = float(it.valuation_rate or 0)
-				break
-		total_cost = unit_cost * qty
-		batch.db_set("unit_cost", unit_cost)
-		batch.db_set("total_cost", total_cost)
+	cost_per_g = (total_raw_cost / total_weight) if total_weight else 0.0
+	batch.set("outputs", [])
+	for code, name, qty, weight in outputs:
+		unit_cost = weight * cost_per_g
+		batch.append("outputs", {"item_code": code, "item_name": name, "qty": qty, "weight_per_unit": weight, "unit_cost": unit_cost, "amount": unit_cost * qty})
 
-		# 4) Waste = damaged finished pieces -> Material Issue from FG (capped at produced qty).
-		# Process loss (kg) is already reflected in actual material consumption, so it is
-		# recorded on the batch but NOT posted as a separate stock movement.
-		waste_qty = sum(float(w.get("qty") or 0) for w in (draft.get("waste") or []))
-		waste_qty = min(waste_qty, qty)
-		if waste_qty > 0:
-			issue = frappe.new_doc("Stock Entry")
-			issue.stock_entry_type = "Material Issue"
-			issue.company = c.company
-			issue.from_warehouse = c.fg
-			issue.append("items", {"item_code": variant, "qty": waste_qty, "s_warehouse": c.fg})
-			issue.insert(ignore_permissions=True)
-			issue.submit()
-			frappe.db.set_value("Stock Entry", issue.name, "custom_production_batch", batch.name)
-			batch.db_set("waste_entry", issue.name)
+	# Loss (recorded only)
+	batch.set("losses", [])
+	for l in payload.get("losses") or []:
+		q = float(l.get("qty") or 0)
+		if q <= 0 and not l.get("reason"):
+			continue
+		batch.append("losses", {"reason": l.get("reason"), "qty": q, "unit": l.get("unit") or "كجم", "rate": cost_per_g * 1000, "amount": q * 1000 * cost_per_g})
 
-		batch.db_set("status", "Completed")
-		frappe.db.commit()
-	except Exception:
-		batch.db_set("status", "Failed")
-		batch.db_set("error_log", frappe.get_traceback())
-		frappe.db.commit()
-		raise
-
-	return {
-		"batchName": batch.name,
-		"batchRef": draft.get("batchRef"),
-		"product": draft.get("product"),
-		"productName": draft.get("productName"),
-		"variant": variant,
-		"weight": draft.get("weight"),
-		"producedQty": qty,
-		"workOrder": batch.work_order,
-		"manufactureEntry": batch.manufacture_entry,
-		"unitCost": batch.unit_cost,
-		"totalCost": batch.total_cost,
-		"savedBy": frappe.session.user,
-		"savedAt": frappe.utils.now_datetime().isoformat(),
-	}
+	batch.total_raw_cost = total_raw_cost
+	batch.total_output_weight = total_weight
 
 
 @frappe.whitelist()
-def save_draft(draft, totals=None):
-	"""Save a Food Logger draft as a Draft-status batch (no Work Order / stock movement)."""
+def save_draft(payload):
+	"""Create/update a Draft Production Batch (no stock movement)."""
 	import json
 
-	if isinstance(draft, str):
-		draft = json.loads(draft)
-
+	if isinstance(payload, str):
+		payload = json.loads(payload)
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Login required"), frappe.PermissionError)
 	if not can_enter():
 		frappe.throw(_("You do not have permission to enter production data."), frappe.PermissionError)
 
-	name = draft.get("batchName")
-	if name and frappe.db.exists("Los Andalus Production Batch", name):
-		batch = frappe.get_doc("Los Andalus Production Batch", name)
-	else:
-		batch = frappe.new_doc("Los Andalus Production Batch")
+	wb_name = payload.get("workbench")
+	if not wb_name:
+		frappe.throw(_("Select a workbench first"))
+	wb = frappe.get_cached_doc("Workbench", wb_name)
 
+	name = payload.get("batchName")
+	batch = (
+		frappe.get_doc("Los Andalus Production Batch", name)
+		if name and frappe.db.exists("Los Andalus Production Batch", name)
+		else frappe.new_doc("Los Andalus Production Batch")
+	)
 	batch.update(
 		{
-			"product": draft.get("product"),
-			"product_name": draft.get("productName"),
-			"variant": draft.get("variant"),
-			"bom": draft.get("variant") and frappe.db.get_value("Item", draft.get("variant"), "default_bom"),
-			"batch_reference": draft.get("batchRef"),
-			"produced_qty": float(draft.get("producedQty") or 0),
-			"weight": draft.get("weight") or 0,
+			"workbench": wb.name,
+			"product_category": wb.product_category,
+			"shift": payload.get("shift"),
+			"raw_material_warehouse": wb.raw_material_warehouse,
+			"manufacturing_warehouse": wb.manufacturing_warehouse,
+			"fg_warehouse": wb.fg_warehouse,
+			"batch_reference": payload.get("batchRef"),
 			"operator": frappe.session.user,
 			"status": "Draft",
-			"notes": draft.get("notes"),
+			"notes": payload.get("notes"),
 		}
 	)
-	_fill_batch_children(batch, draft)
+	_compute_and_fill(batch, payload)
 	batch.save(ignore_permissions=True)
 	frappe.db.commit()
-	return {"batchName": batch.name, "status": batch.status}
+	return {
+		"batchName": batch.name,
+		"status": batch.status,
+		"totalRawCost": batch.total_raw_cost,
+		"totalOutputWeight": batch.total_output_weight,
+	}
+
+
+@frappe.whitelist()
+def submit_batch(payload, totals=None):
+	"""Phase 2: posts Material Transfer → Issue → Receipt (FEFO, weight cost). Not yet implemented."""
+	frappe.throw(_("Production posting is implemented in Phase 2 (Transfer → Issue → Receipt)."))
