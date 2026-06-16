@@ -92,9 +92,19 @@ onUnmounted(() => clearInterval(timer))
         </div>
       </section>
 
-      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 fade-up-4">
-        <i class="fa-solid fa-circle-info ml-1"></i> حُفظت كمسودة. ترحيل المخزون الفعلي (نقل/صرف/استلام) سيتم في المرحلة الثانية.
-      </div>
+      <section class="mb-6 fade-up-4">
+        <div class="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <i class="fa-solid fa-cloud-arrow-up text-success"></i>
+            <h3 class="text-sm font-bold">تم ترحيل المخزون في ERPNext</h3>
+          </div>
+          <div class="space-y-2 text-sm">
+            <div class="flex items-center justify-between py-1.5 border-b border-border"><span class="text-muted">نقل المواد (خام ← تصنيع)</span><span class="font-bold text-primary">{{ saved.transferEntry }}</span></div>
+            <div class="flex items-center justify-between py-1.5 border-b border-border"><span class="text-muted">صرف المواد</span><span class="font-bold text-primary">{{ saved.issueEntry }}</span></div>
+            <div class="flex items-center justify-between py-1.5"><span class="text-muted">استلام المنتج النهائي</span><span class="font-bold text-primary">{{ saved.receiptEntry }}</span></div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-border shadow-lg">

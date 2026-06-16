@@ -23,11 +23,11 @@ async function logout() {
 }
 
 async function save() {
-  if (!confirmed.value || saving.value) return
+  if (!confirmed.value || saving.value || !session.canProduce) return
   saving.value = true
   try {
-    const result = await call("losand.api.manufacture.save_draft", { payload: draft })
-    sessionStorage.setItem("foodLoggerSuccess", JSON.stringify({ ...result, draft }))
+    const result = await call("losand.api.manufacture.submit_batch", { payload: draft })
+    sessionStorage.setItem("foodLoggerSuccess", JSON.stringify(result))
     sessionStorage.removeItem("foodLoggerDraft")
     router.push("/food-logger/success")
   } catch (e) {
@@ -134,11 +134,15 @@ onUnmounted(() => clearInterval(timer))
 
     <footer class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-border shadow-lg">
       <div class="max-w-4xl mx-auto px-4 md:px-6 py-3">
+        <div v-if="!session.canProduce" class="mb-2 flex items-center gap-2 text-xs font-bold text-danger bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+          <i class="fa-solid fa-lock"></i>
+          <span>ليس لديك صلاحية ترحيل الإنتاج (مطلوب دور «مشرف التصنيع»).</span>
+        </div>
         <div class="flex items-center gap-3">
           <button @click="router.push('/food-logger/new')" class="flex items-center gap-2 px-5 py-3 bg-slate-100 text-muted rounded-xl text-sm font-semibold border border-border hover:bg-slate-200"><i class="fa-solid fa-arrow-right text-sm"></i> رجوع</button>
-          <button @click="save" :disabled="!confirmed || saving" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            <i class="fa-solid" :class="saving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
-            {{ saving ? "جارٍ الحفظ..." : "حفظ الدفعة" }}
+          <button @click="save" :disabled="!confirmed || saving || !session.canProduce" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <i class="fa-solid" :class="saving ? 'fa-spinner fa-spin' : 'fa-circle-check'"></i>
+            {{ saving ? "جارٍ الترحيل..." : "تأكيد وترحيل الدفعة" }}
           </button>
         </div>
       </div>

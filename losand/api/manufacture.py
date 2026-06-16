@@ -244,7 +244,150 @@ def save_draft(payload):
 	}
 
 
+def _fefo_rows(item_code, warehouse, qty):
+	"""Allocate qty across available batches in a warehouse, earliest expiry first."""
+	from erpnext.stock.doctype.batch.batch import get_batch_qty
+
+	batches = frappe.get_all(
+		"Batch",
+		filters={"item": item_code, "disabled": 0},
+		fields=["name"],
+		order_by="ifnull(expiry_date, '2999-12-31') asc, creation asc",
+	)
+	rows = []
+	remaining = frappe.utils.flt(qty)
+	for b in batches:
+		if remaining <= 0:
+			break
+		avail = frappe.utils.flt(get_batch_qty(b.name, warehouse) or 0)
+		if avail <= 0:
+			continue
+		take = min(remaining, avail)
+		rows.append((b.name, take))
+		remaining -= take
+	if remaining > 1e-6:
+		frappe.throw(_("Not enough batch stock of {0} in {1} (short {2}).").format(item_code, warehouse, remaining))
+	return rows
+
+
 @frappe.whitelist()
 def submit_batch(payload, totals=None):
-	"""Phase 2: posts Material Transfer → Issue → Receipt (FEFO, weight cost). Not yet implemented."""
-	frappe.throw(_("Production posting is implemented in Phase 2 (Transfer → Issue → Receipt)."))
+	"""Post the production cycle: Material Transfer (raw→WIP) → Material Issue (consume, FEFO)
+	→ Material Receipt (finished goods at weight-allocated cost). Ties everything to a
+	Los Andalus Production Batch. Issue + Receipt share the clearing account so the GL nets to zero."""
+	import json
+
+	from frappe.utils import flt
+
+	if isinstance(payload, str):
+		payload = json.loads(payload)
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"), frappe.PermissionError)
+	if not can_produce():
+		frappe.throw(_("You do not have permission to produce (Manufacture Supervisor role required)."), frappe.PermissionError)
+
+	wb_name = payload.get("workbench")
+	if not wb_name:
+		frappe.throw(_("Select a workbench first"))
+	wb = frappe.get_cached_doc("Workbench", wb_name)
+	c = cfg()
+	clearing = c.clearing or frappe.db.get_value("Account", {"company": c.company, "account_type": "Stock Adjustment", "is_group": 0}, "name")
+	rm_wh, wip_wh, fg_wh = wb.raw_material_warehouse, wb.manufacturing_warehouse, wb.fg_warehouse
+
+	# Build the batch (Draft) with computed children
+	batch = frappe.new_doc("Los Andalus Production Batch")
+	batch.update(
+		{
+			"workbench": wb.name,
+			"product_category": wb.product_category,
+			"shift": payload.get("shift"),
+			"raw_material_warehouse": rm_wh,
+			"manufacturing_warehouse": wip_wh,
+			"fg_warehouse": fg_wh,
+			"batch_reference": payload.get("batchRef"),
+			"operator": frappe.session.user,
+			"status": "Draft",
+			"notes": payload.get("notes"),
+		}
+	)
+	_compute_and_fill(batch, payload)
+	if not batch.materials:
+		frappe.throw(_("Enter at least one raw material consumed"))
+	if not batch.outputs:
+		frappe.throw(_("Enter at least one finished product"))
+	batch.insert(ignore_permissions=True)
+
+	def _make(ste_type, from_wh=None, to_wh=None):
+		se = frappe.new_doc("Stock Entry")
+		se.stock_entry_type = ste_type
+		se.company = c.company
+		se.custom_production_batch = batch.name
+		if from_wh:
+			se.from_warehouse = from_wh
+		if to_wh:
+			se.to_warehouse = to_wh
+		return se
+
+	try:
+		# 1) Material Transfer raw → WIP (FEFO from raw warehouse)
+		transfer = _make("Material Transfer", rm_wh, wip_wh)
+		for m in batch.materials:
+			for batch_no, q in _fefo_rows(m.item_code, rm_wh, m.qty):
+				transfer.append("items", {"item_code": m.item_code, "qty": q, "s_warehouse": rm_wh, "t_warehouse": wip_wh, "use_serial_batch_fields": 1, "batch_no": batch_no})
+		transfer.insert(ignore_permissions=True)
+		transfer.submit()
+		batch.db_set("transfer_entry", transfer.name)
+		batch.db_set("status", "Transferred")
+
+		# 2) Material Issue from WIP (FEFO) — value = C
+		issue = _make("Material Issue", wip_wh, None)
+		for m in batch.materials:
+			for batch_no, q in _fefo_rows(m.item_code, wip_wh, m.qty):
+				issue.append("items", {"item_code": m.item_code, "qty": q, "s_warehouse": wip_wh, "use_serial_batch_fields": 1, "batch_no": batch_no, "expense_account": clearing})
+		issue.insert(ignore_permissions=True)
+		issue.submit()
+		issue.reload()
+		c_actual = sum(flt(i.amount) for i in issue.items)
+		batch.db_set("issue_entry", issue.name)
+		batch.db_set("status", "Issued")
+
+		# 3) Material Receipt finished goods at weight-allocated cost (auto-create FG batches)
+		total_weight = flt(batch.total_output_weight) or 1
+		cost_per_g = c_actual / total_weight
+		receipt = _make("Material Receipt", None, fg_wh)
+		for o in batch.outputs:
+			receipt.append("items", {"item_code": o.item_code, "qty": o.qty, "t_warehouse": fg_wh, "basic_rate": flt(o.weight_per_unit) * cost_per_g, "use_serial_batch_fields": 1, "expense_account": clearing})
+		receipt.insert(ignore_permissions=True)
+		receipt.submit()
+		receipt.reload()
+		batch.db_set("receipt_entry", receipt.name)
+
+		# Write back ERPNext-actual cost + FG batch numbers
+		batch.db_set("total_raw_cost", c_actual)
+		fg_batch = {}
+		for o in batch.outputs:
+			bn = frappe.get_all("Batch", filters={"item": o.item_code}, order_by="creation desc", limit=1, pluck="name")
+			fg_batch[o.item_code] = bn[0] if bn else None
+		for o in batch.outputs:
+			unit_cost = flt(o.weight_per_unit) * cost_per_g
+			o.db_set("unit_cost", unit_cost)
+			o.db_set("amount", unit_cost * flt(o.qty))
+			o.db_set("batch_no", fg_batch.get(o.item_code))
+		batch.db_set("status", "Completed")
+		frappe.db.commit()
+	except Exception:
+		batch.db_set("status", "Failed")
+		batch.db_set("error_log", frappe.get_traceback())
+		frappe.db.commit()
+		raise
+
+	return {
+		"batchName": batch.name,
+		"status": batch.status,
+		"transferEntry": batch.transfer_entry,
+		"issueEntry": batch.issue_entry,
+		"receiptEntry": batch.receipt_entry,
+		"totalRawCost": batch.total_raw_cost,
+		"totalOutputWeight": batch.total_output_weight,
+		"draft": payload,
+	}
