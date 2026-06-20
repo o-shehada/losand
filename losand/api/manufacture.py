@@ -57,15 +57,40 @@ def get_current_session():
 
 
 def _stock_map(codes, warehouse):
-	qty_map = {}
+	"""Per item+warehouse {qty, rate} from Bin. rate = warehouse moving-avg valuation
+	(set by each Material Receipt into that warehouse), NOT the company-wide Item.valuation_rate."""
+	out = {}
 	if codes:
 		for b in frappe.get_all(
 			"Bin",
 			filters={"item_code": ["in", codes], "warehouse": warehouse},
-			fields=["item_code", "actual_qty"],
+			fields=["item_code", "actual_qty", "valuation_rate"],
 		):
-			qty_map[b.item_code] = qty_map.get(b.item_code, 0) + (b.actual_qty or 0)
-	return qty_map
+			e = out.setdefault(b.item_code, {"qty": 0.0, "rate": 0.0})
+			e["qty"] += b.actual_qty or 0
+			if b.valuation_rate:
+				e["rate"] = float(b.valuation_rate)
+	return out
+
+
+def _last_receipt_rate(code, warehouse):
+	"""Rate of the LAST stock receipt of an item into a warehouse (latest purchase price),
+	NOT the moving-average. Reads the most recent incoming Stock Ledger Entry. Falls back to
+	the Bin moving-avg valuation, then None. NOTE: this is a DISPLAY/preview rate — the actual
+	consumption posted by submit_batch is still valued at moving-avg by ERPNext's ledger."""
+	if not (code and warehouse):
+		return None
+	rows = frappe.get_all(
+		"Stock Ledger Entry",
+		filters={"item_code": code, "warehouse": warehouse, "actual_qty": [">", 0], "is_cancelled": 0},
+		fields=["incoming_rate"],
+		order_by="posting_date desc, posting_time desc, creation desc",
+		limit=1,
+	)
+	if rows and rows[0].incoming_rate:
+		return float(rows[0].incoming_rate)
+	r = frappe.db.get_value("Bin", {"item_code": code, "warehouse": warehouse}, "valuation_rate")
+	return float(r) if r else None
 
 
 # ---------------------------------------------------------------------------
@@ -132,15 +157,16 @@ def get_category_raw_materials(category, warehouse=None):
 		order_by="item_name asc",
 	)
 	codes = [i.item_code for i in items]
-	qty_map = _stock_map(codes, warehouse)
+	bin_map = _stock_map(codes, warehouse)
 	return [
 		{
 			"item_code": i.item_code,
 			"name_ar": i.item_name,
 			"name_en": html.unescape(frappe.utils.strip_html(i.description or "")).strip(),
 			"unit": i.stock_uom,
-			"rate": float(i.valuation_rate or 0),
-			"available_qty": float(qty_map.get(i.item_code, 0)),
+			# last receipt rate into the warehouse, fall back to item master rate
+			"rate": float(_last_receipt_rate(i.item_code, warehouse) or i.valuation_rate or 0),
+			"available_qty": float(bin_map.get(i.item_code, {}).get("qty") or 0),
 		}
 		for i in items
 	]
@@ -151,6 +177,7 @@ def get_category_raw_materials(category, warehouse=None):
 # ---------------------------------------------------------------------------
 def _compute_and_fill(batch, payload):
 	"""Fill outputs/materials/losses child tables + compute C, W, and weight-allocated cost."""
+	raw_wh = batch.raw_material_warehouse
 	# Raw materials consumed → C
 	total_raw_cost = 0.0
 	batch.set("materials", [])
@@ -160,10 +187,39 @@ def _compute_and_fill(batch, payload):
 		if not code or qty <= 0:
 			continue
 		info = frappe.db.get_value("Item", code, ["item_name", "stock_uom", "valuation_rate"], as_dict=True) or {}
-		rate = float(m.get("rate") if m.get("rate") is not None else info.get("valuation_rate") or 0)
+		# last receipt rate into the warehouse (preview); client rate / item master are fallbacks
+		rate = _last_receipt_rate(code, raw_wh)
+		if rate is None:
+			rate = float(m.get("rate") if m.get("rate") is not None else info.get("valuation_rate") or 0)
 		amount = qty * rate
 		total_raw_cost += amount
 		batch.append("materials", {"item_code": code, "item_name": info.get("item_name"), "unit": info.get("stock_uom"), "qty": qty, "rate": rate, "amount": amount})
+
+	# Raw material loss (الفاقد) → also part of C, but stored separately for analysis.
+	batch.set("losses", [])
+	for l in payload.get("losses") or []:
+		code = l.get("item_code")
+		qty = float(l.get("qty") or 0)
+		if not code or qty <= 0:
+			continue
+		info = frappe.db.get_value("Item", code, ["item_name", "stock_uom", "valuation_rate"], as_dict=True) or {}
+		rate = _last_receipt_rate(code, raw_wh)
+		if rate is None:
+			rate = float(l.get("rate") if l.get("rate") is not None else info.get("valuation_rate") or 0)
+		amount = qty * rate
+		total_raw_cost += amount
+		batch.append(
+			"losses",
+			{
+				"item_code": code,
+				"item_name": info.get("item_name"),
+				"qty": qty,
+				"unit": info.get("stock_uom") or l.get("unit"),
+				"rate": rate,
+				"amount": amount,
+				"reason": l.get("reason"),
+			},
+		)
 
 	# Finished products → total output weight W
 	outputs = []
@@ -183,14 +239,6 @@ def _compute_and_fill(batch, payload):
 	for code, name, qty, weight in outputs:
 		unit_cost = weight * cost_per_g
 		batch.append("outputs", {"item_code": code, "item_name": name, "qty": qty, "weight_per_unit": weight, "unit_cost": unit_cost, "amount": unit_cost * qty})
-
-	# Loss (recorded only)
-	batch.set("losses", [])
-	for l in payload.get("losses") or []:
-		q = float(l.get("qty") or 0)
-		if q <= 0 and not l.get("reason"):
-			continue
-		batch.append("losses", {"reason": l.get("reason"), "qty": q, "unit": l.get("unit") or "كجم", "rate": cost_per_g * 1000, "amount": q * 1000 * cost_per_g})
 
 	batch.total_raw_cost = total_raw_cost
 	batch.total_output_weight = total_weight
@@ -271,6 +319,19 @@ def _fefo_rows(item_code, warehouse, qty):
 	return rows
 
 
+def _material_issue_rows(batch):
+	"""Combine consumed raw materials and same-item loss rows for one stock deduction."""
+	combined = {}
+	for row in list(batch.materials or []) + list(batch.losses or []):
+		qty = frappe.utils.flt(row.qty)
+		if not row.item_code or qty <= 0:
+			continue
+		if row.item_code not in combined:
+			combined[row.item_code] = frappe._dict(item_code=row.item_code, qty=0)
+		combined[row.item_code].qty += qty
+	return list(combined.values())
+
+
 @frappe.whitelist()
 def submit_batch(payload, totals=None):
 	"""Post the production cycle: Material Transfer (raw→WIP) → Material Issue (consume, FEFO)
@@ -317,12 +378,14 @@ def submit_batch(payload, totals=None):
 	if not batch.outputs:
 		frappe.throw(_("Enter at least one finished product"))
 	batch.insert(ignore_permissions=True)
+	material_issue_rows = _material_issue_rows(batch)
 
 	def _make(ste_type, from_wh=None, to_wh=None):
 		se = frappe.new_doc("Stock Entry")
 		se.stock_entry_type = ste_type
 		se.company = c.company
 		se.custom_production_batch = batch.name
+		se.custom_workbench = wb.name
 		if from_wh:
 			se.from_warehouse = from_wh
 		if to_wh:
@@ -332,7 +395,7 @@ def submit_batch(payload, totals=None):
 	try:
 		# 1) Material Transfer raw → WIP (FEFO from raw warehouse)
 		transfer = _make("Material Transfer", rm_wh, wip_wh)
-		for m in batch.materials:
+		for m in material_issue_rows:
 			for batch_no, q in _fefo_rows(m.item_code, rm_wh, m.qty):
 				transfer.append("items", {"item_code": m.item_code, "qty": q, "s_warehouse": rm_wh, "t_warehouse": wip_wh, "use_serial_batch_fields": 1, "batch_no": batch_no})
 		transfer.insert(ignore_permissions=True)
@@ -342,7 +405,7 @@ def submit_batch(payload, totals=None):
 
 		# 2) Material Issue from WIP (FEFO) — value = C
 		issue = _make("Material Issue", wip_wh, None)
-		for m in batch.materials:
+		for m in material_issue_rows:
 			for batch_no, q in _fefo_rows(m.item_code, wip_wh, m.qty):
 				issue.append("items", {"item_code": m.item_code, "qty": q, "s_warehouse": wip_wh, "use_serial_batch_fields": 1, "batch_no": batch_no, "expense_account": clearing})
 		issue.insert(ignore_permissions=True)

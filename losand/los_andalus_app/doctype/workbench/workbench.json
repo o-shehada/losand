@@ -31,8 +31,11 @@
   {"fieldname": "staff", "fieldtype": "Table", "label": "System Users", "options": "Workbench Staff"},
   {"fieldname": "workers", "fieldtype": "Table", "label": "Workers (non-system)", "options": "Workbench Worker"}
  ],
- "links": [],
- "modified": "2026-06-14 00:00:00",
+ "links": [
+  {"group": "Production", "link_doctype": "Los Andalus Production Batch", "link_fieldname": "workbench"},
+  {"group": "Stock", "link_doctype": "Stock Entry", "link_fieldname": "custom_workbench"}
+ ],
+ "modified": "2026-06-16 22:00:00",
  "module": "Los Andalus App",
  "name": "Workbench",
  "naming_rule": "By fieldname",

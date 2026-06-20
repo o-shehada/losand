@@ -14,6 +14,7 @@ if (!draft.workbench) router.replace("/home")
 const totals = computed(() => calc(draft))
 const producedProducts = computed(() => draft.finished_products.filter((f) => Number(f.qty) > 0))
 const usedMaterials = computed(() => draft.raw_materials.filter((m) => Number(m.qty) > 0))
+const lossMaterials = computed(() => (draft.losses || []).filter((m) => Number(m.qty) > 0))
 const confirmed = ref(false)
 const saving = ref(false)
 
@@ -78,7 +79,7 @@ onUnmounted(() => clearInterval(timer))
       <section class="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">القطع المنتجة</p><p class="text-2xl font-black">{{ totals.totalPieces }}</p></div>
         <div class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">إجمالي الوزن</p><p class="text-2xl font-black">{{ fmt1(totals.W) }}<span class="text-sm"> جم</span></p></div>
-        <div class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">تكلفة المواد (C)</p><p class="text-2xl font-black text-primary">{{ fmt(totals.C) }}</p></div>
+        <div class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">تكلفة المواد والفاقد (C)</p><p class="text-2xl font-black text-primary">{{ fmt(totals.C) }}</p></div>
         <div class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">التكلفة/جرام</p><p class="text-2xl font-black">{{ fmt(totals.costPerG) }}</p></div>
       </section>
 
@@ -109,15 +110,21 @@ onUnmounted(() => clearInterval(timer))
             <div class="col-span-2 text-center text-sm text-muted">{{ fmt(m.rate) }}</div>
             <div class="col-span-2 text-center text-sm font-bold">{{ fmt(m.qty * m.rate) }}</div>
           </div>
-          <div class="bg-primary-light px-4 py-3 flex items-center justify-between border-t-2 border-primary/20"><span class="text-sm font-bold text-primary">إجمالي تكلفة المواد</span><span class="text-base font-black text-primary">{{ fmt(totals.C) }} {{ cur }}</span></div>
+          <div class="bg-primary-light px-4 py-3 flex items-center justify-between border-t-2 border-primary/20"><span class="text-sm font-bold text-primary">إجمالي تكلفة المواد والفاقد</span><span class="text-base font-black text-primary">{{ fmt(totals.C) }} {{ cur }}</span></div>
         </div>
       </section>
 
       <!-- Loss -->
-      <section v-if="draft.losses.length" class="mb-6">
+      <section v-if="lossMaterials.length" class="mb-6">
         <div class="flex items-center gap-3 mb-4"><div class="w-8 h-8 bg-warning rounded-lg flex items-center justify-center"><i class="fa-solid fa-arrow-trend-down text-white text-sm"></i></div><h2 class="text-base font-bold">الفاقد</h2><div class="flex-1 h-px bg-border"></div></div>
-        <div class="bg-white rounded-2xl border border-border shadow-sm p-4 space-y-2">
-          <div v-for="(l, i) in draft.losses" :key="i" class="flex items-center justify-between text-sm border-b border-border last:border-0 py-1.5"><span>{{ l.reason || "—" }}</span><span class="font-bold text-warning">{{ l.qty }} كجم</span></div>
+        <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted"><div class="col-span-6">المادة</div><div class="col-span-2 text-center">الكمية</div><div class="col-span-2 text-center">السعر</div><div class="col-span-2 text-center">الإجمالي</div></div>
+          <div v-for="(l, i) in lossMaterials" :key="l.item_code || i" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < lossMaterials.length - 1 ? 'border-b border-border' : ''">
+            <div class="col-span-6 font-semibold text-sm">{{ l.name_ar || l.item_name || l.item_code }}</div>
+            <div class="col-span-2 text-center text-sm">{{ l.qty }} {{ l.unit }}</div>
+            <div class="col-span-2 text-center text-sm text-muted">{{ fmt(l.rate) }}</div>
+            <div class="col-span-2 text-center text-sm font-bold text-warning">{{ fmt(l.qty * l.rate) }}</div>
+          </div>
         </div>
       </section>
 

@@ -97,6 +97,9 @@ website_route_rules = [
 # before_install = "losand.install.before_install"
 # after_install = "losand.install.after_install"
 
+# Re-seed Arabic translation overrides (ERPNext ar overrides our app CSV for shared strings).
+after_migrate = ["losand.setup.arabic_translations.run"]
+
 # Uninstallation
 # ------------
 

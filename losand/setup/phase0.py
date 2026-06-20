@@ -173,6 +173,26 @@ def _ensure_workbenches():
 		).insert(ignore_permissions=True)
 
 
+def _ensure_link_back_fields():
+	# Reverse link so the Workbench "Connections" tab can group its production Stock Entries.
+	# (Production Batches link back via their own `workbench` field, no custom field needed.)
+	fid = "Stock Entry-custom_workbench"
+	if not frappe.db.exists("Custom Field", fid):
+		frappe.get_doc(
+			{
+				"doctype": "Custom Field",
+				"dt": "Stock Entry",
+				"fieldname": "custom_workbench",
+				"label": "Workbench",
+				"fieldtype": "Link",
+				"options": "Workbench",
+				"insert_after": "custom_production_batch",
+				"read_only": 1,
+				"no_copy": 1,
+			}
+		).insert(ignore_permissions=True)
+
+
 def _disable_legacy():
 	# Old templates + their variants, and the old non-batch RM-* items.
 	legacy = frappe.get_all(
@@ -232,6 +252,7 @@ def run():
 	_ensure_final_products()
 	_ensure_raw_materials()
 	_ensure_workbenches()
+	_ensure_link_back_fields()
 	_disable_legacy()
 	frappe.db.commit()
 	summary = {

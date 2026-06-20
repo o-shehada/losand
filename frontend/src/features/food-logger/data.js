@@ -40,13 +40,15 @@ export function createDraft() {
     dateLabel: todayLabel(),
     finished_products: [], // {item_code, name, weight, qty}
     raw_materials: [], // {item_code, name_ar, name_en, unit, rate, available, qty}
-    losses: [], // {reason, qty, unit}
+    losses: [], // same raw materials table: {item_code, name_ar, unit, rate, available, qty}
     notes: "",
   }
 }
 
 export function calc(draft) {
-  const C = draft.raw_materials.reduce((s, m) => s + (Number(m.qty) || 0) * (Number(m.rate) || 0), 0)
+  const materialCost = draft.raw_materials.reduce((s, m) => s + (Number(m.qty) || 0) * (Number(m.rate) || 0), 0)
+  const lossCost = (draft.losses || []).reduce((s, m) => s + (Number(m.qty) || 0) * (Number(m.rate) || 0), 0)
+  const C = materialCost + lossCost
   const W = draft.finished_products.reduce((s, f) => s + (Number(f.qty) || 0) * (Number(f.weight) || 0), 0)
   const costPerG = W ? C / W : 0
   const totalPieces = draft.finished_products.reduce((s, f) => s + (Number(f.qty) || 0), 0)

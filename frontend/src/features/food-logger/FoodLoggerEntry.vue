@@ -20,14 +20,24 @@ async function logout() {
   router.replace("/login")
 }
 
-function addLoss() {
-  draft.losses.push({ reason: "", qty: 0, unit: "كجم" })
-}
-
 const producedAny = computed(() => draft.finished_products.some((f) => Number(f.qty) > 0))
 const rawAny = computed(() => draft.raw_materials.some((m) => Number(m.qty) > 0))
-const stockIssues = computed(() => draft.raw_materials.filter((m) => Number(m.qty) > Number(m.available || 0)))
+const lossByItem = computed(() => Object.fromEntries((draft.losses || []).map((l) => [l.item_code, Number(l.qty) || 0])))
+const stockIssues = computed(() => draft.raw_materials.filter((m) => (Number(m.qty) || 0) + (lossByItem.value[m.item_code] || 0) > Number(m.available || 0)))
 const canContinue = computed(() => producedAny.value && rawAny.value && stockIssues.value.length === 0)
+
+function syncLossRows(raws = []) {
+  const existing = Object.fromEntries((draft.losses || []).map((l) => [l.item_code, l]))
+  draft.losses = (raws || []).map((r) => ({
+    item_code: r.item_code,
+    name_ar: r.name_ar,
+    name_en: r.name_en,
+    unit: r.unit,
+    rate: r.rate,
+    available: r.available_qty ?? r.available ?? 0,
+    qty: Number(existing[r.item_code]?.qty) || 0,
+  }))
+}
 
 function continueToSummary() {
   if (!canContinue.value) return
@@ -68,16 +78,17 @@ onMounted(async () => {
     // Raw materials: seed if empty, else refresh live available/rate (keep entered qty)
     const rMap = Object.fromEntries((raws || []).map((r) => [r.item_code, r]))
     if (!draft.raw_materials.length) {
-      draft.raw_materials = (raws || []).map((r) => ({ ...r, qty: 0 }))
+      draft.raw_materials = (raws || []).map((r) => ({ ...r, available: r.available_qty, qty: 0 }))
     } else {
       draft.raw_materials.forEach((m) => {
         const r = rMap[m.item_code]
         if (r) { m.available = r.available_qty; m.rate = r.rate; m.unit = r.unit; m.name_ar = r.name_ar }
       })
       ;(raws || []).forEach((r) => {
-        if (!draft.raw_materials.some((m) => m.item_code === r.item_code)) draft.raw_materials.push({ ...r, qty: 0 })
+        if (!draft.raw_materials.some((m) => m.item_code === r.item_code)) draft.raw_materials.push({ ...r, available: r.available_qty, qty: 0 })
       })
     }
+    syncLossRows(draft.raw_materials)
   } finally {
     loading.value = false
   }
@@ -164,17 +175,17 @@ onUnmounted(() => clearInterval(timer))
             <div v-for="(m, i) in draft.raw_materials" :key="m.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < draft.raw_materials.length - 1 ? 'border-b border-border' : ''">
               <div class="col-span-4">
                 <p class="font-semibold text-sm">{{ m.name_ar }}</p>
-                <p class="text-[11px] font-bold mt-0.5" :class="Number(m.qty) > Number(m.available || 0) || Number(m.available || 0) <= 0 ? 'text-danger' : 'text-success'"><i class="fa-solid fa-warehouse text-[10px] ml-1"></i>المتاح: {{ fmt1(m.available || 0) }} {{ m.unit }}</p>
+                <p class="text-[11px] font-bold mt-0.5" :class="(Number(m.qty) || 0) + (lossByItem[m.item_code] || 0) > Number(m.available || 0) || Number(m.available || 0) <= 0 ? 'text-danger' : 'text-success'"><i class="fa-solid fa-warehouse text-[10px] ml-1"></i>المتاح: {{ fmt1(m.available || 0) }} {{ m.unit }}</p>
               </div>
               <div class="col-span-1 text-center"><span class="bg-slate-100 text-slate-600 text-xs font-medium px-2 py-1 rounded-md">{{ m.unit }}</span></div>
               <div class="col-span-3 flex justify-center">
-                <input type="number" min="0" v-model.number="m.qty" class="w-24 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none" :class="Number(m.qty) > Number(m.available || 0) ? 'border-danger/60 bg-red-50 text-danger focus:border-danger' : 'border-border focus:border-primary'" />
+                <input type="number" min="0" v-model.number="m.qty" class="w-24 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none" :class="(Number(m.qty) || 0) + (lossByItem[m.item_code] || 0) > Number(m.available || 0) ? 'border-danger/60 bg-red-50 text-danger focus:border-danger' : 'border-border focus:border-primary'" />
               </div>
               <div class="col-span-2 text-center text-sm font-semibold">{{ fmt(m.rate) }} {{ cur }}</div>
               <div class="col-span-2 text-center text-sm font-bold">{{ fmt((Number(m.qty) || 0) * (Number(m.rate) || 0)) }} {{ cur }}</div>
             </div>
             <div class="bg-slate-50 border-t-2 border-border px-4 py-3 flex items-center justify-between">
-              <span class="text-xs text-muted">إجمالي تكلفة المواد (C)</span>
+              <span class="text-xs text-muted">إجمالي تكلفة المواد والفاقد (C)</span>
               <span class="text-sm font-bold text-primary">{{ fmt(totals.C) }} {{ cur }}</span>
             </div>
           </div>
@@ -187,14 +198,26 @@ onUnmounted(() => clearInterval(timer))
             <h2 class="text-base font-bold">الفاقد <span class="text-xs text-muted font-normal">(اختياري)</span></h2>
             <div class="flex-1 h-px bg-border"></div>
           </div>
-          <div class="bg-white rounded-2xl border border-border shadow-sm p-4 space-y-2">
-            <div v-for="(l, i) in draft.losses" :key="i" class="flex items-center gap-3 p-2.5 bg-amber-50/50 rounded-xl border border-amber-100">
-              <input v-model="l.reason" placeholder="السبب" class="text-sm flex-1 bg-transparent focus:outline-none" />
-              <input type="number" step="0.1" v-model.number="l.qty" class="w-20 text-center text-sm font-semibold border-2 border-amber-200 bg-white rounded-lg py-1 focus:outline-none focus:border-warning" />
-              <span class="text-xs text-muted w-8">كجم</span>
-              <button @click="draft.losses.splice(i, 1)" class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-xmark text-warning text-xs"></i></button>
+          <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+            <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted">
+              <div class="col-span-4">المادة الخام</div>
+              <div class="col-span-1 text-center">الوحدة</div>
+              <div class="col-span-3 text-center">كمية الفاقد</div>
+              <div class="col-span-2 text-center">التكلفة/وحدة</div>
+              <div class="col-span-2 text-center">الإجمالي</div>
             </div>
-            <button @click="addLoss" class="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-amber-200 rounded-xl text-warning text-sm font-semibold hover:bg-amber-50"><i class="fa-solid fa-plus text-xs"></i> إضافة فاقد</button>
+            <div v-for="(l, i) in draft.losses" :key="l.item_code" class="grid grid-cols-12 px-4 py-3 items-center bg-amber-50/30" :class="i < draft.losses.length - 1 ? 'border-b border-border' : ''">
+              <div class="col-span-4">
+                <p class="font-semibold text-sm">{{ l.name_ar }}</p>
+                <p class="text-[11px] text-muted">يخصم مع المواد المستهلكة من المخزون</p>
+              </div>
+              <div class="col-span-1 text-center"><span class="bg-amber-100 text-amber-700 text-xs font-medium px-2 py-1 rounded-md">{{ l.unit }}</span></div>
+              <div class="col-span-3 flex justify-center">
+                <input type="number" min="0" step="0.1" v-model.number="l.qty" class="w-24 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none" :class="(Number(l.qty) || 0) + (Number(draft.raw_materials.find((m) => m.item_code === l.item_code)?.qty) || 0) > Number(l.available || 0) ? 'border-danger/60 bg-red-50 text-danger focus:border-danger' : 'border-amber-200 bg-white focus:border-warning'" />
+              </div>
+              <div class="col-span-2 text-center text-sm font-semibold">{{ fmt(l.rate) }} {{ cur }}</div>
+              <div class="col-span-2 text-center text-sm font-bold text-warning">{{ fmt((Number(l.qty) || 0) * (Number(l.rate) || 0)) }} {{ cur }}</div>
+            </div>
           </div>
         </section>
 
@@ -213,7 +236,7 @@ onUnmounted(() => clearInterval(timer))
       <div class="max-w-4xl mx-auto px-4 md:px-6 py-3">
         <div class="flex items-center gap-3 mb-3">
           <div class="flex-1 grid grid-cols-3 gap-3">
-            <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border"><p class="text-xs text-muted mb-0.5">تكلفة المواد (C)</p><p class="text-sm font-bold">{{ fmt(totals.C) }} {{ cur }}</p></div>
+            <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border"><p class="text-xs text-muted mb-0.5">تكلفة المواد والفاقد (C)</p><p class="text-sm font-bold">{{ fmt(totals.C) }} {{ cur }}</p></div>
             <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border"><p class="text-xs text-muted mb-0.5">إجمالي الوزن</p><p class="text-sm font-bold">{{ fmt1(totals.W) }} جم</p></div>
             <div class="bg-primary-light rounded-xl px-3 py-2 text-center border border-primary/20"><p class="text-xs text-primary mb-0.5">القطع المنتجة</p><p class="text-sm font-bold text-primary">{{ totals.totalPieces }}</p></div>
           </div>

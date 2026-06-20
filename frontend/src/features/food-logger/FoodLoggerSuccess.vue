@@ -76,7 +76,7 @@ onUnmounted(() => clearInterval(timer))
           <div class="grid grid-cols-3 divide-x divide-x-reverse divide-border border-t border-border">
             <div class="px-4 py-4 text-center"><p class="text-xs text-muted mb-1">القطع المنتجة</p><p class="text-2xl font-black">{{ totals.totalPieces }}</p></div>
             <div class="px-4 py-4 text-center"><p class="text-xs text-muted mb-1">إجمالي الوزن</p><p class="text-2xl font-black">{{ fmt1(totals.W) }}<span class="text-sm"> جم</span></p></div>
-            <div class="px-4 py-4 text-center"><p class="text-xs text-muted mb-1">تكلفة المواد</p><p class="text-2xl font-black text-primary">{{ fmt(totals.C) }}</p></div>
+            <div class="px-4 py-4 text-center"><p class="text-xs text-muted mb-1">تكلفة المواد والفاقد</p><p class="text-2xl font-black text-primary">{{ fmt(totals.C) }}</p></div>
           </div>
         </div>
       </section>

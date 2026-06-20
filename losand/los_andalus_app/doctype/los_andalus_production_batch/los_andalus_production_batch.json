@@ -57,7 +57,7 @@
   {"fieldname": "section_materials", "fieldtype": "Section Break", "label": "Raw Materials Consumed"},
   {"fieldname": "materials", "fieldtype": "Table", "label": "Materials", "options": "Los Andalus Production Material"},
   {"fieldname": "section_loss", "fieldtype": "Section Break", "label": "Loss (الفاقد)"},
-  {"fieldname": "losses", "fieldtype": "Table", "label": "Loss", "options": "Los Andalus Production Loss", "description": "Process loss (kg) — recorded for analysis; not posted (already absorbed in the weight-based cost)."},
+  {"fieldname": "losses", "fieldtype": "Table", "label": "Loss", "options": "Los Andalus Production Loss", "description": "Raw material loss (الفاقد) — posted with consumed raw materials and absorbed in finished product cost."},
   {"fieldname": "section_links", "fieldtype": "Section Break", "label": "ERPNext Stock Entries"},
   {"fieldname": "transfer_entry", "fieldtype": "Link", "label": "Material Transfer (raw → WIP)", "options": "Stock Entry", "description": "Moves raw materials from the raw warehouse into the manufacturing warehouse."},
   {"fieldname": "issue_entry", "fieldtype": "Link", "label": "Material Issue (consume)", "options": "Stock Entry", "description": "Consumes the raw materials from the manufacturing warehouse (value = C, at valuation rate, FEFO batches)."},

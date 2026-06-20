@@ -12,11 +12,11 @@
   {"fieldname": "weight_per_unit", "fieldtype": "Float", "label": "Weight/Unit (g)", "in_list_view": 1, "columns": 1},
   {"fieldname": "unit_cost", "fieldtype": "Currency", "label": "Cost/Unit", "in_list_view": 1, "columns": 2, "read_only": 1},
   {"fieldname": "amount", "fieldtype": "Currency", "label": "Amount", "in_list_view": 1, "columns": 2, "read_only": 1},
-  {"fieldname": "batch_no", "fieldtype": "Data", "label": "Batch", "read_only": 1}
+  {"fieldname": "batch_no", "fieldtype": "Link", "label": "Batch", "options": "Batch", "read_only": 1}
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-06-14 00:00:00",
+ "modified": "2026-06-16 22:20:00",
  "module": "Los Andalus App",
  "name": "Los Andalus Production Output",
  "owner": "Administrator",
