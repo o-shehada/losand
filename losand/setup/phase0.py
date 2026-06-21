@@ -19,6 +19,8 @@ FG_GROUP = "Products"
 RM_GROUP = "Raw Material"
 WAREHOUSES = ("Stores - LA", "Work In Progress - LA", "Finished Goods - LA")
 
+BATCH_DT = "Los Andalus Production Batch"
+
 CATEGORIES = ["Chicken Burger", "Beef Burger", "Bread", "Sauce"]
 SHIFTS = [("Morning", "08:00:00", "16:00:00"), ("Evening", "16:00:00", "23:59:00")]
 

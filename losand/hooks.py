@@ -100,6 +100,38 @@ website_route_rules = [
 # Re-seed Arabic translation overrides (ERPNext ar overrides our app CSV for shared strings).
 after_migrate = ["losand.setup.arabic_translations.run"]
 
+# Fixtures
+# --------
+# Custom Fields that travel with the app (applied on every `bench migrate`).
+fixtures = [
+	{
+		"dt": "Custom Field",
+		"filters": [["name", "in", [
+			"Item-is_final_product",
+			"Item-product_category",
+			"Item-is_raw_material",
+			"Item-classification",
+			"Stock Entry-custom_workbench",
+		]]],
+	},
+	{
+		"dt": "Number Card",
+		"filters": [["name", "in", [
+			"LA Batches Today",
+			"LA Total Produced",
+			"LA Production Cost",
+			"LA FG Stock Value",
+		]]],
+	},
+	{
+		"dt": "Dashboard Chart",
+		"filters": [["name", "in", [
+			"LA Daily Production",
+			"LA Batches by Status",
+		]]],
+	},
+]
+
 # Uninstallation
 # ------------
 
