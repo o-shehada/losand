@@ -13,7 +13,8 @@ const password = ref("")
 
 async function submit() {
   await signIn(username.value, password.value)
-  router.replace("/home")
+  // "/" resolves per-portal: manufacture redirects to /home, POS lands on register.
+  router.replace("/")
 }
 </script>
 

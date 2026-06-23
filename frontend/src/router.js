@@ -5,8 +5,21 @@ import ManufactureHome from "@/features/manufacture/ManufactureHome.vue"
 import FoodLoggerEntry from "@/features/food-logger/FoodLoggerEntry.vue"
 import FoodLoggerSummary from "@/features/food-logger/FoodLoggerSummary.vue"
 import FoodLoggerSuccess from "@/features/food-logger/FoodLoggerSuccess.vue"
+import PosShell from "@/features/pos/PosShell.vue"
+import PosRegister from "@/features/pos/PosRegister.vue"
+import PosOrders from "@/features/pos/PosOrders.vue"
+import PosInventory from "@/features/pos/PosInventory.vue"
+import PosReports from "@/features/pos/PosReports.vue"
+import PosSettings from "@/features/pos/PosSettings.vue"
 
-const routes = [
+// One Vite bundle serves two portals (manufacture + POS). Each portal is a
+// full-page load mounting the same #app, so we pick the route tree + history
+// base from the URL prefix the server rendered us under.
+const POS_BASE = "/los-andalus/pos"
+const MFG_BASE = "/los-andalus/manufacture"
+const isPos = window.location.pathname.startsWith(POS_BASE)
+
+const manufactureRoutes = [
   { path: "/", redirect: "/home" },
   { path: "/login", name: "login", component: LoginView, meta: { public: true } },
   { path: "/home", name: "home", component: ManufactureHome },
@@ -15,9 +28,24 @@ const routes = [
   { path: "/food-logger/success", name: "food-logger-success", component: FoodLoggerSuccess },
 ]
 
+const posRoutes = [
+  { path: "/login", name: "login", component: LoginView, meta: { public: true } },
+  {
+    path: "/",
+    component: PosShell,
+    children: [
+      { path: "", name: "pos-register", component: PosRegister },
+      { path: "orders", name: "pos-orders", component: PosOrders },
+      { path: "inventory", name: "pos-inventory", component: PosInventory },
+      { path: "reports", name: "pos-reports", component: PosReports },
+      { path: "settings", name: "pos-settings", component: PosSettings },
+    ],
+  },
+]
+
 const router = createRouter({
-  history: createWebHistory("/los-andalus/manufacture"),
-  routes,
+  history: createWebHistory(isPos ? POS_BASE : MFG_BASE),
+  routes: isPos ? posRoutes : manufactureRoutes,
 })
 
 router.beforeEach(async (to) => {
@@ -25,7 +53,7 @@ router.beforeEach(async (to) => {
     await refreshSession().catch(() => null)
   }
   if (to.meta.public && isAuthenticated()) {
-    return "/home"
+    return "/"
   }
   if (!to.meta.public && !isAuthenticated()) {
     return "/login"

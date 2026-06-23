@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script> window.FontAwesomeConfig = { autoReplaceSvg: 'nest'};</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        canvas: '#f7fbf0',
+                        sidebar: '#d4e8b0',
+                        brand: '#8cc63f',
+                        'brand-dark': '#6fa832',
+                        'brand-light': '#e8f5d0',
+                        danger: '#e84c3d',
+                        'danger-light': '#fde8e6',
+                        orange: '#E8490F',
+                        'orange-light': '#fef0eb',
+                        green: '#3DAA6F',
+                        'green-light': '#e8f5ef',
+                        amber: '#F5A623',
+                        'amber-light': '#fef8ec',
+                        muted: '#8a9a7a',
+                        surface: '#ffffff',
+                        border: '#ddeec8',
+                    },
+                    fontFamily: {
+                        cairo: ['Cairo', 'sans-serif'],
+                    },
+                    borderRadius: {
+                        'xl2': '16px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { display: none; }
+        * { font-family: 'Cairo', sans-serif; }
+        .nav-item.active { background: #8cc63f; color: white; }
+        .nav-item { transition: all 0.2s ease; }
+        .sync-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .shift-pill { background: linear-gradient(135deg, #8cc63f, #6fa832); }
+        .table-row { transition: all 0.18s ease; }
+        .table-row:hover { background: #f0f8e8; }
+        .badge-instock { background: rgba(61,170,111,0.12); color: #2d7d52; border: 1px solid rgba(61,170,111,0.35); }
+        .badge-lowstock { background: rgba(232,73,15,0.1); color: #c03a0a; border: 1px solid rgba(232,73,15,0.35); }
+        .badge-outstock { background: rgba(232,76,61,0.12); color: #c03030; border: 1px solid rgba(232,76,61,0.35); }
+        .stat-card { transition: all 0.2s ease; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(140,198,63,0.15); }
+        .btn-action { transition: all 0.18s; }
+        .btn-action:active { transform: scale(0.93); }
+        .category-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+        .cat-meat { background: rgba(232,76,61,0.1); color: #a83030; }
+        .cat-veg { background: rgba(140,198,63,0.13); color: #5a8a1a; }
+        .cat-dairy { background: rgba(245,166,35,0.12); color: #8a6010; }
+        .cat-bev { background: rgba(61,170,111,0.12); color: #1e7a50; }
+        .cat-dry { background: rgba(138,154,122,0.15); color: #4a5a3a; }
+        .cat-bakery { background: rgba(232,73,15,0.1); color: #8a3a0a; }
+        .progress-bar { transition: width 0.4s ease; }
+        .qty-low { color: #E8490F; font-weight: 800; }
+        .qty-out { color: #e84c3d; font-weight: 800; }
+        .qty-ok { color: #3DAA6F; font-weight: 700; }
+        .modal-overlay { backdrop-filter: blur(4px); }
+        .add-modal { animation: slideUp 0.28s ease; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .filter-panel { animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        .row-highlight-low { border-right: 3px solid #E8490F; }
+        .row-highlight-out { border-right: 3px solid #e84c3d; }
+        .row-highlight-ok { border-right: 3px solid transparent; }
+    </style>
+</head>
+<body class="bg-canvas font-cairo overflow-hidden" dir="rtl">
+
+<div id="app-root" class="flex flex-row-reverse w-full" style="height: 100dvh; overflow: hidden;">
+
+    <!-- ===== RIGHT SIDEBAR NAV ===== -->
+    <aside id="sidebar" class="flex flex-col items-center bg-sidebar w-16 md:w-20 py-4 gap-2 border-l border-border flex-shrink-0 relative z-20">
+        <div class="w-10 h-10 md:w-12 md:h-12 bg-brand rounded-xl2 flex items-center justify-center mb-3 shadow-md">
+            <i class="fa-solid fa-utensils text-white text-base md:text-lg"></i>
+        </div>
+        <div class="flex flex-col gap-2 w-full px-2 mt-2">
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-cash-register text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">نقاط البيع</span>
+            </button>
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-receipt text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">الطلبات</span>
+            </button>
+            <button class="nav-item active flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px]">
+                <i class="fa-solid fa-boxes-stacked text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">المخزون</span>
+            </button>
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-chart-bar text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">التقارير</span>
+            </button>
+        </div>
+        <div class="mt-auto flex flex-col items-center gap-3">
+            <div class="flex flex-col items-center gap-1">
+                <div class="w-2.5 h-2.5 bg-green rounded-full sync-dot"></div>
+                <span class="text-[8px] text-muted font-semibold">متزامن</span>
+            </div>
+            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg" class="w-9 h-9 rounded-full border-2 border-brand object-cover" alt="user"/>
+        </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main id="main-content" class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+        <!-- TOP HEADER -->
+        <header id="inventory-header" class="bg-surface border-b border-border px-4 py-2.5 flex items-center justify-between gap-3 flex-shrink-0 shadow-sm">
+            <!-- Right: Title + Branch -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-brand-light rounded-xl flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-boxes-stacked text-brand text-base"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-gray-800 text-base md:text-lg leading-tight">إدارة المخزون</h1>
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-store text-brand text-xs"></i>
+                        <span class="text-xs text-muted font-semibold">فرع وسط المدينة</span>
+                        <span class="text-xs text-muted">·</span>
+                        <i class="fa-regular fa-calendar text-muted text-xs"></i>
+                        <span class="text-xs text-muted">الأربعاء، ٢٢ يناير ٢٠٢٥</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Left: Controls -->
+            <div class="flex items-center gap-2 flex-wrap justify-end">
+                <!-- Search -->
+                <div class="relative">
+                    <input id="search-input" type="text" placeholder="بحث في المخزون..." class="bg-canvas border border-border rounded-xl pr-4 pl-9 py-2 text-sm focus:outline-none focus:border-brand text-gray-700 w-44 md:w-56 min-h-[44px]"/>
+                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm"></i>
+                </div>
+                <!-- Filter Button -->
+                <div class="relative">
+                    <button id="filter-btn" class="bg-canvas border border-border text-gray-600 text-xs font-bold px-3 py-2 rounded-xl min-h-[44px] flex items-center gap-1.5 hover:border-brand hover:text-brand transition-colors">
+                        <i class="fa-solid fa-sliders text-xs"></i>
+                        <span class="hidden md:inline">تصفية</span>
+                    </button>
+                    <!-- Filter Dropdown -->
+                    <div id="filter-panel" class="filter-panel hidden absolute left-0 top-12 bg-surface border border-border rounded-xl2 shadow-lg z-30 w-52 p-3">
+                        <p class="text-xs font-extrabold text-gray-700 mb-2">تصفية حسب الحالة</p>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" class="filter-check" data-filter="all" checked class="accent-brand w-4 h-4"/>
+                                <span class="text-xs font-semibold text-gray-700">الكل</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" class="filter-check" data-filter="instock" class="accent-brand w-4 h-4"/>
+                                <span class="text-xs font-semibold text-green">متوفر</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" class="filter-check" data-filter="lowstock" class="accent-brand w-4 h-4"/>
+                                <span class="text-xs font-semibold text-orange">منخفض</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" class="filter-check" data-filter="outstock" class="accent-brand w-4 h-4"/>
+                                <span class="text-xs font-semibold text-danger">نفد</span>
+                            </label>
+                        </div>
+                        <div class="mt-3 pt-2 border-t border-border">
+                            <p class="text-xs font-extrabold text-gray-700 mb-2">تصفية حسب الفئة</p>
+                            <select class="w-full bg-canvas border border-border rounded-lg text-xs font-semibold text-gray-700 px-2 py-2 focus:outline-none focus:border-brand min-h-[36px]">
+                                <option>كل الفئات</option>
+                                <option>لحوم</option>
+                                <option>خضروات</option>
+                                <option>ألبان</option>
+                                <option>مشروبات</option>
+                                <option>جافة</option>
+                                <option>مخبوزات</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <!-- Export -->
+                <button class="bg-canvas border border-border text-gray-600 text-xs font-bold px-3 py-2 rounded-xl min-h-[44px] flex items-center gap-1.5 hover:border-brand hover:text-brand transition-colors">
+                    <i class="fa-solid fa-file-export text-xs"></i>
+                    <span class="hidden md:inline">تصدير</span>
+                </button>
+                <!-- Shift Pill -->
+                <div class="shift-pill text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <i class="fa-solid fa-sun text-yellow-200 text-xs"></i>
+                    <span>وردية الصباح</span>
+                </div>
+                <!-- Role Badge -->
+                <div class="bg-amber/15 border border-amber text-amber text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <i class="fa-solid fa-user-tie text-xs"></i>
+                    <span>مدير الفرع</span>
+                </div>
+                <!-- Add New Item -->
+                <button id="add-btn" class="bg-brand text-white text-xs font-extrabold px-4 py-2 rounded-xl min-h-[44px] flex items-center gap-2 hover:bg-brand-dark transition-colors shadow-md shadow-brand/25">
+                    <i class="fa-solid fa-plus text-sm"></i>
+                    <span>إضافة صنف</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- STATS BAR -->
+        <div id="stats-bar" class="bg-surface border-b border-border px-4 py-3 flex items-center gap-3 flex-shrink-0 flex-wrap">
+            <!-- Total Items -->
+            <div class="stat-card flex items-center gap-2.5 bg-brand-light border border-brand/25 rounded-xl px-3 py-2 min-h-[44px]">
+                <div class="w-7 h-7 bg-brand rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-layer-group text-white text-xs"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-muted font-semibold leading-none">إجمالي الأصناف</p>
+                    <p class="text-sm font-extrabold text-gray-800 leading-tight">٤٢ صنف</p>
+                </div>
+            </div>
+            <!-- In Stock -->
+            <div class="stat-card flex items-center gap-2.5 bg-green-light border border-green/25 rounded-xl px-3 py-2 min-h-[44px]">
+                <div class="w-7 h-7 bg-green rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-circle-check text-white text-xs"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-muted font-semibold leading-none">متوفر</p>
+                    <p class="text-sm font-extrabold text-green leading-tight">٢٨ صنف</p>
+                </div>
+            </div>
+            <!-- Low Stock -->
+            <div class="stat-card flex items-center gap-2.5 bg-orange-light border border-orange/25 rounded-xl px-3 py-2 min-h-[44px]">
+                <div class="w-7 h-7 bg-orange rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation text-white text-xs"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-muted font-semibold leading-none">مخزون منخفض</p>
+                    <p class="text-sm font-extrabold text-orange leading-tight">٩ أصناف</p>
+                </div>
+            </div>
+            <!-- Out of Stock -->
+            <div class="stat-card flex items-center gap-2.5 bg-danger-light border border-danger/25 rounded-xl px-3 py-2 min-h-[44px]">
+                <div class="w-7 h-7 bg-danger rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-circle-xmark text-white text-xs"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-muted font-semibold leading-none">نفد المخزون</p>
+                    <p class="text-sm font-extrabold text-danger leading-tight">٥ أصناف</p>
+                </div>
+            </div>
+            <!-- Last Updated -->
+            <div class="mr-auto flex items-center gap-2 bg-canvas border border-border rounded-xl px-3 py-2 min-h-[44px]">
+                <i class="fa-solid fa-rotate text-brand text-xs sync-dot"></i>
+                <div>
+                    <p class="text-[10px] text-muted font-semibold leading-none">آخر تحديث</p>
+                    <p class="text-xs font-bold text-gray-700 leading-tight">منذ ٥ دقائق</p>
+                </div>
+            </div>
+            <!-- Quick Order Alert -->
+            <div class="flex items-center gap-2 bg-amber-light border border-amber/30 rounded-xl px-3 py-2 min-h-[44px]">
+                <i class="fa-solid fa-bell text-amber text-xs"></i>
+                <div>
+                    <p class="text-[10px] text-muted font-semibold leading-none">تنبيهات الطلب</p>
+                    <p class="text-xs font-bold text-amber leading-tight">٦ أصناف تحتاج طلب</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABLE AREA -->
+        <div id="inventory-table-area" class="flex-1 overflow-hidden flex flex-col p-3 md:p-4 gap-3">
+
+            <!-- Table Container -->
+            <div id="inventory-table-container" class="bg-surface rounded-xl2 border border-border shadow-sm flex-1 flex flex-col overflow-hidden">
+
+                <!-- Table Header -->
+                <div class="grid grid-cols-12 gap-0 bg-brand-light/70 border-b border-border px-4 py-2.5 flex-shrink-0 rounded-t-xl2">
+                    <div class="col-span-4 flex items-center gap-1.5">
+                        <span class="text-xs font-extrabold text-gray-600">اسم الصنف</span>
+                        <i class="fa-solid fa-sort text-muted text-[10px] cursor-pointer hover:text-brand"></i>
+                    </div>
+                    <div class="col-span-2 flex items-center gap-1.5">
+                        <span class="text-xs font-extrabold text-gray-600">الفئة</span>
+                    </div>
+                    <div class="col-span-2 flex items-center gap-1.5">
+                        <span class="text-xs font-extrabold text-gray-600">الكمية</span>
+                        <i class="fa-solid fa-sort text-muted text-[10px] cursor-pointer hover:text-brand"></i>
+                    </div>
+                    <div class="col-span-1 text-xs font-extrabold text-gray-600">الوحدة</div>
+                    <div class="col-span-2 text-xs font-extrabold text-gray-600">الحالة</div>
+                    <div class="col-span-1 text-xs font-extrabold text-gray-600 text-center">إجراءات</div>
+                </div>
+
+                <!-- Table Body -->
+                <div id="inventory-rows" class="flex-1 overflow-y-auto divide-y divide-border">
+
+                    <!-- ROW 1 — Low Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-low" data-status="lowstock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-brand-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-drumstick-bite text-brand text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">لحم بقري مفروم</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: MTB-001</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-meat">لحوم</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-low">٢.٥ كجم</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-orange h-1.5 rounded-full progress-bar" style="width: 18%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ١٤ كجم</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">كيلوغرام</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-lowstock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> منخفض
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors" title="تعديل">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors" title="حذف">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 2 — Out of Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-out" data-status="outstock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-danger-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-egg text-danger text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">بيض طازج</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: DRY-021</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-dairy">ألبان وبيض</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-out">٠ حبة</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-danger h-1.5 rounded-full progress-bar" style="width: 0%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ١٢٠ حبة</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">حبة</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-outstock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-circle-xmark text-[10px]"></i> نفد
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors" title="تعديل">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors" title="حذف">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 3 — In Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-ok" data-status="instock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-green-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-carrot text-green text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">طماطم طازجة</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: VEG-005</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-veg">خضروات</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-ok">١٨ كجم</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-green h-1.5 rounded-full progress-bar" style="width: 72%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ٢٥ كجم</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">كيلوغرام</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-instock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i> متوفر
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors" title="تعديل">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors" title="حذف">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 4 — In Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-ok" data-status="instock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-brand-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-wheat-awn text-brand text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">دقيق أبيض</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: DRY-003</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-dry">جافة</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-ok">٣٥ كجم</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-green h-1.5 rounded-full progress-bar" style="width: 88%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ٤٠ كجم</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">كيلوغرام</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-instock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i> متوفر
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 5 — Low Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-low" data-status="lowstock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-orange-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-cheese text-orange text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">جبن موزاريلا</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: DRY-011</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-dairy">ألبان وبيض</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-low">١.٢ كجم</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-orange h-1.5 rounded-full progress-bar" style="width: 12%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ١٠ كجم</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">كيلوغرام</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-lowstock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> منخفض
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 6 — Out of Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-out" data-status="outstock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-danger-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-droplet text-danger text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">زيت زيتون</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: DRY-008</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-dry">جافة</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-out">٠ لتر</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-danger h-1.5 rounded-full progress-bar" style="width: 0%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ٨ لتر</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">لتر</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-outstock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-circle-xmark text-[10px]"></i> نفد
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 7 — In Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-ok" data-status="instock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-green-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-mug-hot text-green text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">قهوة عربية</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: BEV-002</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-bev">مشروبات</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-ok">٤.٥ كجم</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-green h-1.5 rounded-full progress-bar" style="width: 60%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ٧.٥ كجم</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">كيلوغرام</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-instock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i> متوفر
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 8 — Low Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-low" data-status="lowstock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-orange-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-bread-slice text-orange text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">خبز عربي</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: BAK-001</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-bakery">مخبوزات</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-low">١٢ رغيف</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-orange h-1.5 rounded-full progress-bar" style="width: 20%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ٦٠ رغيف</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">رغيف</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-lowstock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> منخفض
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 9 — In Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-ok" data-status="instock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-brand-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-bottle-water text-brand text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">مياه معدنية ٠.٥ لتر</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: BEV-010</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-bev">مشروبات</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-ok">٩٦ علبة</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-green h-1.5 rounded-full progress-bar" style="width: 80%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ١٢٠ علبة</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">علبة</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-instock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i> متوفر
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 10 — Out of Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-out" data-status="outstock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-danger-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-fish text-danger text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">سمك مقلي مجمد</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: MTB-007</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-meat">لحوم</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-out">٠ كجم</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-danger h-1.5 rounded-full progress-bar" style="width: 0%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ١٢ كجم</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">كيلوغرام</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-outstock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-circle-xmark text-[10px]"></i> نفد
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ROW 11 — In Stock -->
+                    <div class="table-row grid grid-cols-12 gap-0 px-4 py-3 items-center row-highlight-ok" data-status="instock">
+                        <div class="col-span-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-green-light flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-pepper-hot text-green text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">بهارات مشكلة</p>
+                                <p class="text-[10px] text-muted font-semibold">SKU: DRY-015</p>
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="category-pill cat-dry">جافة</span>
+                        </div>
+                        <div class="col-span-2">
+                            <div>
+                                <p class="text-sm qty-ok">٣.٨ كجم</p>
+                                <div class="w-20 bg-border rounded-full h-1.5 mt-1">
+                                    <div class="bg-green h-1.5 rounded-full progress-bar" style="width: 76%"></div>
+                                </div>
+                                <p class="text-[10px] text-muted font-semibold mt-0.5">من ٥ كجم</p>
+                            </div>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-xs font-bold text-gray-600">كيلوغرام</span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="badge-instock text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i> متوفر
+                            </span>
+                        </div>
+                        <div class="col-span-1 flex items-center justify-center gap-1.5">
+                            <button class="btn-action w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center hover:bg-brand hover:text-white text-brand transition-colors">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button class="btn-action w-8 h-8 bg-danger-light rounded-lg flex items-center justify-center hover:bg-danger hover:text-white text-danger transition-colors">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Table Footer / Pagination -->
+                <div id="table-footer" class="bg-brand-light/40 border-t border-border px-4 py-2.5 flex items-center justify-between flex-shrink-0 rounded-b-xl2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-muted font-semibold">عرض</span>
+                        <select class="bg-surface border border-border rounded-lg text-xs font-bold text-gray-700 px-2 py-1 focus:outline-none focus:border-brand min-h-[32px]">
+                            <option>١٠</option>
+                            <option>٢٥</option>
+                            <option>٥٠</option>
+                        </select>
+                        <span class="text-xs text-muted font-semibold">من ٤٢ صنف</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button class="w-8 h-8 bg-surface border border-border rounded-lg flex items-center justify-center text-muted hover:border-brand hover:text-brand transition-colors">
+                            <i class="fa-solid fa-chevron-right text-xs"></i>
+                        </button>
+                        <button class="w-8 h-8 bg-brand text-white rounded-lg flex items-center justify-center text-xs font-bold">١</button>
+                        <button class="w-8 h-8 bg-surface border border-border rounded-lg flex items-center justify-center text-gray-700 text-xs font-bold hover:border-brand hover:text-brand transition-colors">٢</button>
+                        <button class="w-8 h-8 bg-surface border border-border rounded-lg flex items-center justify-center text-gray-700 text-xs font-bold hover:border-brand hover:text-brand transition-colors">٣</button>
+                        <button class="w-8 h-8 bg-surface border border-border rounded-lg flex items-center justify-center text-muted hover:border-brand hover:text-brand transition-colors">
+                            <i class="fa-solid fa-chevron-left text-xs"></i>
+                        </button>
+                    </div>
+                    <div class="text-xs text-muted font-semibold">صفحة ١ من ٥</div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ===== ADD NEW ITEM MODAL ===== -->
+<div id="add-modal-overlay" class="hidden fixed inset-0 bg-black/40 modal-overlay z-50 flex items-center justify-center p-4">
+    <div id="add-modal" class="add-modal bg-surface rounded-xl2 shadow-2xl w-full max-w-lg border border-border">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between px-5 py-4 border-b border-border bg-brand-light/60 rounded-t-xl2">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 bg-brand rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-plus text-white text-sm"></i>
+                </div>
+                <h2 class="font-extrabold text-gray-800 text-base">إضافة صنف جديد</h2>
+            </div>
+            <button id="close-modal-btn" class="w-8 h-8 bg-canvas border border-border rounded-lg flex items-center justify-center text-muted hover:text-danger hover:border-danger transition-colors">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+        <!-- Modal Body -->
+        <div class="px-5 py-4 flex flex-col gap-3">
+            <!-- Item Name -->
+            <div>
+                <label class="text-xs font-extrabold text-gray-600 mb-1 block">اسم الصنف <span class="text-danger">*</span></label>
+                <input type="text" placeholder="مثال: لحم بقري مفروم" class="w-full bg-canvas border border-border rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-brand min-h-[44px]"/>
+            </div>
+            <!-- Category + Unit Row -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs font-extrabold text-gray-600 mb-1 block">الفئة <span class="text-danger">*</span></label>
+                    <select class="w-full bg-canvas border border-border rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-brand min-h-[44px]">
+                        <option>اختر الفئة</option>
+                        <option>لحوم</option>
+                        <option>خضروات</option>
+                        <option>ألبان وبيض</option>
+                        <option>مشروبات</option>
+                        <option>جافة</option>
+                        <option>مخبوزات</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-extrabold text-gray-600 mb-1 block">وحدة القياس <span class="text-danger">*</span></label>
+                    <select class="w-full bg-canvas border border-border rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-brand min-h-[44px]">
+                        <option>اختر الوحدة</option>
+                        <option>كيلوغرام</option>
+                        <option>لتر</option>
+                        <option>علبة</option>
+                        <option>رغيف</option>
+                        <option>حبة</option>
+                        <option>كيس</option>
+                    </select>
+                </div>
+            </div>
+            <!-- Quantities Row -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs font-extrabold text-gray-600 mb-1 block">الكمية الحالية <span class="text-danger">*</span></label>
+                    <input type="number" placeholder="٠" class="w-full bg-canvas border border-border rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-brand min-h-[44px]"/>
+                </div>
+                <div>
+                    <label class="text-xs font-extrabold text-gray-600 mb-1 block">الكمية القصوى</label>
+                    <input type="number" placeholder="٠" class="w-full bg-canvas border border-border rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-brand min-h-[44px]"/>
+                </div>
+            </div>
+            <!-- Low Stock Threshold -->
+            <div>
+                <label class="text-xs font-extrabold text-gray-600 mb-1 block">حد المخزون المنخفض</label>
+                <div class="relative">
+                    <input type="number" placeholder="٢٠٪ من الكمية القصوى" class="w-full bg-canvas border border-border rounded-xl pr-4 pl-20 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-brand min-h-[44px]"/>
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted font-bold">٪ أو كمية</span>
+                </div>
+            </div>
+            <!-- SKU -->
+            <div>
+                <label class="text-xs font-extrabold text-gray-600 mb-1 block">رمز الصنف (SKU)</label>
+                <input type="text" placeholder="مثال: MTB-001" class="w-full bg-canvas border border-border rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-brand min-h-[44px]"/>
+            </div>
+        </div>
+        <!-- Modal Footer -->
+        <div class="px-5 py-3.5 border-t border-border flex items-center justify-end gap-2.5 bg-canvas/60 rounded-b-xl2">
+            <button id="cancel-modal-btn" class="bg-canvas border border-border text-gray-600 text-sm font-bold px-5 py-2.5 rounded-xl min-h-[44px] hover:border-danger hover:text-danger transition-colors">
+                إلغاء
+            </button>
+            <button class="bg-brand text-white text-sm font-extrabold px-6 py-2.5 rounded-xl min-h-[44px] flex items-center gap-2 hover:bg-brand-dark transition-colors shadow-md shadow-brand/25">
+                <i class="fa-solid fa-floppy-disk text-sm"></i>
+                حفظ الصنف
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Toggle Add Modal
+    const addBtn = document.getElementById('add-btn');
+    const modalOverlay = document.getElementById('add-modal-overlay');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const cancelModalBtn = document.getElementById('cancel-modal-btn');
+
+    addBtn.addEventListener('click', () => {
+        modalOverlay.classList.remove('hidden');
+    });
+    closeModalBtn.addEventListener('click', () => {
+        modalOverlay.classList.add('hidden');
+    });
+    cancelModalBtn.addEventListener('click', () => {
+        modalOverlay.classList.add('hidden');
+    });
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) modalOverlay.classList.add('hidden');
+    });
+
+    // Toggle Filter Panel
+    const filterBtn = document.getElementById('filter-btn');
+    const filterPanel = document.getElementById('filter-panel');
+    filterBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        filterPanel.classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => {
+        filterPanel.classList.add('hidden');
+    });
+
+    // Search functionality
+    const searchInput = document.getElementById('search-input');
+    searchInput.addEventListener('input', function () {
+        const query = this.value.toLowerCase();
+        const rows = document.querySelectorAll('#inventory-rows .table-row');
+        rows.forEach(row => {
+            const name = row.querySelector('p.font-bold')?.textContent?.toLowerCase() || '';
+            row.style.display = name.includes(query) ? '' : 'none';
+        });
+    });
+
+    // Action button feedback
+    document.querySelectorAll('.btn-action').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            this.style.transform = 'scale(0.88)';
+            setTimeout(() => { this.style.transform = ''; }, 200);
+        });
+    });
+</script>
+</body>
+</html>

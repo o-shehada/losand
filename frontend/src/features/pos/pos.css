@@ -1,0 +1,262 @@
+/* Restaurant POS — shared custom styles ported from docs/POS mockups.
+   Color values mirror the `pos.*` Tailwind tokens. Class names are unique to
+   the POS portal so they never collide with the manufacture portal. */
+
+.pos-root {
+  font-family: "Cairo", sans-serif;
+}
+/* never override the Font Awesome glyph font on icon elements */
+.pos-root :not([class*="fa-"]) {
+  font-family: inherit;
+}
+
+.pos-root ::-webkit-scrollbar {
+  display: none;
+}
+
+/* sidebar nav */
+.pos-nav-item {
+  transition: all 0.2s ease;
+}
+.pos-nav-item.active {
+  background: #8cc63f;
+  color: #fff;
+}
+
+.pos-sync-dot {
+  animation: pos-pulse 2s infinite;
+}
+@keyframes pos-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.pos-shift-pill {
+  background: linear-gradient(135deg, #8cc63f, #6fa832);
+}
+
+/* register / order cards */
+.pos-product-card,
+.pos-order-card {
+  transition: all 0.22s ease;
+}
+.pos-product-card:hover,
+.pos-order-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(140, 198, 63, 0.18);
+}
+
+.pos-btn:active {
+  transform: scale(0.95);
+}
+
+/* kanban column accents */
+.pos-col-new {
+  border-top: 3px solid #8cc63f;
+}
+.pos-col-prep {
+  border-top: 3px solid #f5a623;
+}
+.pos-col-ready {
+  border-top: 3px solid #3daa6f;
+}
+.pos-col-done {
+  border-top: 3px solid #8a9a7a;
+}
+
+/* time chips */
+.pos-time-fresh {
+  color: #3daa6f;
+  background: rgba(61, 170, 111, 0.12);
+}
+.pos-time-warn {
+  color: #f5a623;
+  background: rgba(245, 166, 35, 0.12);
+}
+.pos-time-late {
+  color: #e84c3d;
+  background: rgba(232, 76, 61, 0.12);
+}
+
+/* status badges */
+.pos-badge-new {
+  background: rgba(140, 198, 63, 0.15);
+  color: #6fa832;
+  border: 1px solid #8cc63f;
+}
+.pos-badge-prep {
+  background: rgba(245, 166, 35, 0.15);
+  color: #c4820a;
+  border: 1px solid #f5a623;
+}
+.pos-badge-ready {
+  background: rgba(61, 170, 111, 0.15);
+  color: #2d7d52;
+  border: 1px solid #3daa6f;
+}
+.pos-badge-done {
+  background: rgba(138, 154, 122, 0.15);
+  color: #5a6a4a;
+  border: 1px solid #8a9a7a;
+}
+
+/* order-type chips */
+.pos-type-dine {
+  background: rgba(140, 198, 63, 0.12);
+  color: #6fa832;
+}
+.pos-type-take {
+  background: rgba(245, 166, 35, 0.12);
+  color: #c4820a;
+}
+.pos-type-delivery {
+  background: rgba(232, 76, 61, 0.12);
+  color: #c03030;
+}
+
+/* inventory rows + category pills */
+.pos-table-row {
+  transition: all 0.18s ease;
+}
+.pos-table-row:hover {
+  background: #f0f8e8;
+}
+.pos-badge-instock {
+  background: rgba(61, 170, 111, 0.12);
+  color: #2d7d52;
+  border: 1px solid rgba(61, 170, 111, 0.35);
+}
+.pos-badge-lowstock {
+  background: rgba(232, 73, 15, 0.1);
+  color: #c03a0a;
+  border: 1px solid rgba(232, 73, 15, 0.35);
+}
+.pos-badge-outstock {
+  background: rgba(232, 76, 61, 0.12);
+  color: #c03030;
+  border: 1px solid rgba(232, 76, 61, 0.35);
+}
+.pos-cat {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.pos-cat-meat {
+  background: rgba(232, 76, 61, 0.1);
+  color: #a83030;
+}
+.pos-cat-veg {
+  background: rgba(140, 198, 63, 0.13);
+  color: #5a8a1a;
+}
+.pos-cat-dairy {
+  background: rgba(245, 166, 35, 0.12);
+  color: #8a6010;
+}
+.pos-cat-bev {
+  background: rgba(61, 170, 111, 0.12);
+  color: #1e7a50;
+}
+.pos-cat-dry {
+  background: rgba(138, 154, 122, 0.15);
+  color: #4a5a3a;
+}
+.pos-cat-bakery {
+  background: rgba(232, 73, 15, 0.1);
+  color: #8a3a0a;
+}
+.pos-row-low {
+  border-right: 3px solid #e8490f;
+}
+.pos-row-out {
+  border-right: 3px solid #e84c3d;
+}
+.pos-row-ok {
+  border-right: 3px solid transparent;
+}
+.pos-qty-low {
+  color: #e8490f;
+  font-weight: 800;
+}
+.pos-qty-out {
+  color: #e84c3d;
+  font-weight: 800;
+}
+.pos-qty-ok {
+  color: #3daa6f;
+  font-weight: 700;
+}
+
+/* settings toggle switch */
+.pos-toggle {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 28px;
+  flex-shrink: 0;
+}
+.pos-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.pos-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #ddeec8;
+  border-radius: 28px;
+  transition: 0.3s;
+  border: 1.5px solid #c8dcb0;
+}
+.pos-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #fff;
+  border-radius: 50%;
+  transition: 0.3s;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.pos-toggle input:checked + .pos-toggle-slider {
+  background-color: #8cc63f;
+  border-color: #6fa832;
+}
+[dir="rtl"] .pos-toggle input:checked + .pos-toggle-slider:before {
+  transform: translateX(-24px);
+}
+.pos-toggle input:checked + .pos-toggle-slider:before {
+  transform: translateX(24px);
+}
+
+.pos-section-title-bar {
+  background: linear-gradient(90deg, #e8f5d0 0%, #f7fbf0 100%);
+  border-right: 4px solid #8cc63f;
+}
+.pos-preview-card {
+  background: linear-gradient(135deg, #8cc63f 0%, #6fa832 100%);
+}
+
+/* overlays */
+.pos-modal {
+  animation: pos-slide-up 0.28s ease;
+}
+@keyframes pos-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Branch Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script> window.FontAwesomeConfig = { autoReplaceSvg: 'nest'};</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        canvas: '#f7fbf0',
+                        sidebar: '#d4e8b0',
+                        brand: '#8cc63f',
+                        'brand-dark': '#6fa832',
+                        'brand-light': '#e8f5d0',
+                        danger: '#e84c3d',
+                        'danger-light': '#fde8e6',
+                        orange: '#E8490F',
+                        'orange-light': '#fef0eb',
+                        green: '#3DAA6F',
+                        'green-light': '#e8f5ef',
+                        amber: '#F5A623',
+                        'amber-light': '#fef8ec',
+                        muted: '#8a9a7a',
+                        surface: '#ffffff',
+                        border: '#ddeec8',
+                    },
+                    fontFamily: {
+                        cairo: ['Cairo', 'sans-serif'],
+                    },
+                    borderRadius: {
+                        'xl2': '16px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { display: none; }
+        * { font-family: 'Cairo', sans-serif; }
+        .nav-item.active { background: #8cc63f; color: white; }
+        .nav-item { transition: all 0.2s ease; }
+        .sync-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .shift-pill { background: linear-gradient(135deg, #8cc63f, #6fa832); }
+        .settings-card { transition: all 0.2s ease; }
+        .settings-card:hover { box-shadow: 0 4px 16px rgba(140,198,63,0.10); }
+
+        /* Toggle Switch */
+        .toggle-switch { position: relative; display: inline-block; width: 52px; height: 28px; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ddeec8; border-radius: 28px;
+            transition: 0.3s; border: 1.5px solid #c8dcb0;
+        }
+        .toggle-slider:before {
+            position: absolute; content: "";
+            height: 20px; width: 20px; left: 3px; bottom: 3px;
+            background-color: white; border-radius: 50%;
+            transition: 0.3s; box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        input:checked + .toggle-slider { background-color: #8cc63f; border-color: #6fa832; }
+        input:checked + .toggle-slider:before { transform: translateX(24px); }
+
+        .section-divider { border-top: 1.5px dashed #ddeec8; }
+
+        .input-field {
+            width: 100%; background: #f7fbf0; border: 1.5px solid #ddeec8;
+            border-radius: 12px; padding: 10px 16px; font-size: 14px;
+            color: #374151; outline: none; min-height: 44px;
+            transition: border-color 0.2s;
+        }
+        .input-field:focus { border-color: #8cc63f; }
+        .input-field:disabled { background: #f0f5e8; color: #8a9a7a; cursor: not-allowed; }
+        .input-field.readonly-field { background: #f0f5e8; color: #6a7a5a; cursor: default; }
+
+        .save-btn { transition: all 0.18s; }
+        .save-btn:active { transform: scale(0.95); }
+
+        .badge-section {
+            font-size: 10px; font-weight: 800; padding: 3px 10px;
+            border-radius: 20px; letter-spacing: 0.3px;
+        }
+
+        .preview-card { background: linear-gradient(135deg, #8cc63f 0%, #6fa832 100%); }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide-up { animation: slideUp 0.3s ease forwards; }
+
+        .success-overlay { animation: fadeInScale 0.3s ease; }
+        @keyframes fadeInScale { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+
+        .tag-manager { background: rgba(245,166,35,0.15); color: #8a6010; border: 1px solid rgba(245,166,35,0.4); }
+
+        .section-title-bar {
+            background: linear-gradient(90deg, #e8f5d0 0%, #f7fbf0 100%);
+            border-right: 4px solid #8cc63f;
+        }
+    </style>
+</head>
+<body class="bg-canvas font-cairo overflow-hidden" dir="rtl">
+
+<div id="app-root" class="flex flex-row-reverse w-full" style="height: 100dvh; overflow: hidden;">
+
+    <!-- ===== RIGHT SIDEBAR NAV ===== -->
+    <aside id="sidebar" class="flex flex-col items-center bg-sidebar w-16 md:w-20 py-4 gap-2 border-l border-border flex-shrink-0 relative z-20">
+        <div class="w-10 h-10 md:w-12 md:h-12 bg-brand rounded-xl2 flex items-center justify-center mb-3 shadow-md">
+            <i class="fa-solid fa-utensils text-white text-base md:text-lg"></i>
+        </div>
+        <div class="flex flex-col gap-2 w-full px-2 mt-2">
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-cash-register text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">نقاط البيع</span>
+            </button>
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-receipt text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">الطلبات</span>
+            </button>
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-boxes-stacked text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">المخزون</span>
+            </button>
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-chart-bar text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">التقارير</span>
+            </button>
+            <button class="nav-item active flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px]">
+                <i class="fa-solid fa-gear text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">الإعدادات</span>
+            </button>
+        </div>
+        <div class="mt-auto flex flex-col items-center gap-3">
+            <div class="flex flex-col items-center gap-1">
+                <div class="w-2.5 h-2.5 bg-green rounded-full sync-dot"></div>
+                <span class="text-[8px] text-muted font-semibold">متزامن</span>
+            </div>
+            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg" class="w-9 h-9 rounded-full border-2 border-brand object-cover" alt="user"/>
+        </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main id="main-content" class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+        <!-- TOP HEADER -->
+        <header id="settings-header" class="bg-surface border-b border-border px-4 py-2.5 flex items-center justify-between gap-3 flex-shrink-0 shadow-sm">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-brand-light rounded-xl flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-gear text-brand text-base"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-gray-800 text-base md:text-lg leading-tight">إعدادات الفرع</h1>
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-store text-brand text-xs"></i>
+                        <span class="text-xs text-muted font-semibold">فرع وسط المدينة</span>
+                        <span class="text-xs text-muted">·</span>
+                        <i class="fa-regular fa-calendar text-muted text-xs"></i>
+                        <span class="text-xs text-muted">الأربعاء، ٢٢ يناير ٢٠٢٥</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 flex-wrap justify-end">
+                <!-- Shift Pill -->
+                <div class="shift-pill text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <i class="fa-solid fa-sun text-yellow-200 text-xs"></i>
+                    <span>وردية الصباح</span>
+                </div>
+                <!-- Role Badge -->
+                <div class="bg-amber/15 border border-amber text-amber text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <i class="fa-solid fa-user-tie text-xs"></i>
+                    <span>مدير الفرع</span>
+                </div>
+                <!-- Save Button -->
+                <button id="save-all-btn" class="save-btn bg-brand text-white text-xs font-extrabold px-4 py-2 rounded-xl min-h-[44px] flex items-center gap-2 hover:bg-brand-dark transition-colors shadow-md shadow-brand/25">
+                    <i class="fa-solid fa-floppy-disk text-sm"></i>
+                    <span>حفظ التغييرات</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- SETTINGS BODY -->
+        <div id="settings-body" class="flex-1 overflow-y-auto p-3 md:p-4">
+            <div class="flex flex-col lg:flex-row gap-4 items-start">
+
+                <!-- ===== LEFT: MAIN SETTINGS FORM ===== -->
+                <div id="settings-form-col" class="flex-1 flex flex-col gap-4 min-w-0">
+
+                    <!-- ---- SECTION 1: Basic Info ---- -->
+                    <div id="section-basic" class="settings-card bg-surface rounded-xl2 border border-border shadow-sm overflow-hidden">
+                        <!-- Section Header -->
+                        <div class="section-title-bar px-4 py-3 flex items-center gap-3">
+                            <div class="w-8 h-8 bg-brand rounded-xl flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-store text-white text-sm"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-extrabold text-gray-800 text-sm leading-tight">المعلومات الأساسية</h2>
+                                <p class="text-[10px] text-muted font-semibold">بيانات التعريف بالفرع</p>
+                            </div>
+                            <span class="badge-section bg-brand-light text-brand border border-brand/30 mr-auto">مطلوب</span>
+                        </div>
+
+                        <div class="px-4 py-4 flex flex-col gap-4">
+                            <!-- Branch Name -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">
+                                        اسم الفرع <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="relative">
+                                        <input type="text" value="فرع وسط المدينة" class="input-field pr-10" placeholder="أدخل اسم الفرع"/>
+                                        <i class="fa-solid fa-store absolute right-3 top-1/2 -translate-y-1/2 text-brand text-sm"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">
+                                        رمز الفرع
+                                    </label>
+                                    <div class="relative">
+                                        <input type="text" value="BR-001" class="input-field readonly-field pr-10" readonly/>
+                                        <i class="fa-solid fa-barcode absolute right-3 top-1/2 -translate-y-1/2 text-muted text-sm"></i>
+                                    </div>
+                                    <p class="text-[10px] text-muted mt-1 font-semibold">رمز تلقائي غير قابل للتعديل</p>
+                                </div>
+                            </div>
+
+                            <!-- Location -->
+                            <div>
+                                <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">
+                                    الموقع / العنوان <span class="text-danger">*</span>
+                                </label>
+                                <div class="relative">
+                                    <input type="text" value="شارع عمر المختار، وسط المدينة، طرابلس" class="input-field pr-10" placeholder="أدخل عنوان الفرع"/>
+                                    <i class="fa-solid fa-location-dot absolute right-3 top-1/2 -translate-y-1/2 text-brand text-sm"></i>
+                                </div>
+                            </div>
+
+                            <!-- Contact + Manager Row -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">
+                                        رقم التواصل <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="relative">
+                                        <input type="tel" value="٠٩١-١٢٣-٤٥٦٧" class="input-field pr-10" placeholder="أدخل رقم الهاتف" dir="ltr"/>
+                                        <i class="fa-solid fa-phone absolute right-3 top-1/2 -translate-y-1/2 text-brand text-sm"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">
+                                        اسم المدير المسؤول
+                                    </label>
+                                    <div class="relative">
+                                        <input type="text" value="أحمد محمد العربي" class="input-field pr-10" placeholder="اسم المدير"/>
+                                        <i class="fa-solid fa-user-tie absolute right-3 top-1/2 -translate-y-1/2 text-amber text-sm"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Working Hours -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">وقت الافتتاح</label>
+                                    <div class="relative">
+                                        <input type="time" value="08:00" class="input-field pr-10" dir="ltr"/>
+                                        <i class="fa-regular fa-clock absolute right-3 top-1/2 -translate-y-1/2 text-brand text-sm"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">وقت الإغلاق</label>
+                                    <div class="relative">
+                                        <input type="time" value="23:00" class="input-field pr-10" dir="ltr"/>
+                                        <i class="fa-regular fa-clock absolute right-3 top-1/2 -translate-y-1/2 text-muted text-sm"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ---- SECTION 2: Financials ---- -->
+                    <div id="section-financials" class="settings-card bg-surface rounded-xl2 border border-border shadow-sm overflow-hidden">
+                        <div class="section-title-bar px-4 py-3 flex items-center gap-3">
+                            <div class="w-8 h-8 bg-green rounded-xl flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-coins text-white text-sm"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-extrabold text-gray-800 text-sm leading-tight">الإعدادات المالية</h2>
+                                <p class="text-[10px] text-muted font-semibold">العملة والضرائب والأسعار</p>
+                            </div>
+                            <span class="badge-section tag-manager mr-auto">مدير فقط</span>
+                        </div>
+
+                        <div class="px-4 py-4 flex flex-col gap-4">
+                            <!-- Currency Row -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">العملة المستخدمة</label>
+                                    <div class="relative">
+                                        <input type="text" value="الدينار الليبي (د.ل)" class="input-field readonly-field pr-10" disabled/>
+                                        <i class="fa-solid fa-money-bill-wave absolute right-3 top-1/2 -translate-y-1/2 text-green text-sm"></i>
+                                    </div>
+                                    <p class="text-[10px] text-muted mt-1 font-semibold flex items-center gap-1">
+                                        <i class="fa-solid fa-lock text-[9px]"></i>
+                                        العملة محددة من الإدارة المركزية
+                                    </p>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">رمز العملة</label>
+                                    <div class="relative">
+                                        <input type="text" value="د.ل" class="input-field readonly-field pr-10" disabled dir="ltr"/>
+                                        <i class="fa-solid fa-tag absolute right-3 top-1/2 -translate-y-1/2 text-muted text-sm"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tax Section -->
+                            <div class="bg-green-light border border-green/20 rounded-xl2 p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-percent text-green text-sm"></i>
+                                        <span class="text-sm font-extrabold text-gray-700">نسبة الضريبة (VAT)</span>
+                                    </div>
+                                    <div class="bg-green/15 border border-green/30 text-green text-xs font-extrabold px-3 py-1 rounded-full flex items-center gap-1.5">
+                                        <i class="fa-solid fa-circle-check text-xs"></i>
+                                        معفى من الضريبة
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="text-xs font-semibold text-muted mb-1.5 block">نسبة الضريبة ٪</label>
+                                        <div class="relative">
+                                            <input type="number" value="0" class="input-field readonly-field pr-10" disabled min="0" max="100" dir="ltr"/>
+                                            <i class="fa-solid fa-percent absolute right-3 top-1/2 -translate-y-1/2 text-muted text-sm"></i>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-semibold text-muted mb-1.5 block">تطبيق الضريبة على</label>
+                                        <select class="input-field" disabled>
+                                            <option>غير مطبقة</option>
+                                            <option>إجمالي الطلب</option>
+                                            <option>كل صنف</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="text-[11px] text-green font-bold mt-2 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-circle-info text-[10px]"></i>
+                                    جميع الأسعار شاملة — لا تُطبَّق ضريبة على المبيعات حالياً
+                                </p>
+                            </div>
+
+                            <!-- Price Display + Rounding -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">عرض الأسعار</label>
+                                    <select class="input-field">
+                                        <option selected>شامل الضريبة</option>
+                                        <option>بدون ضريبة</option>
+                                        <option>الاثنان معاً</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">تقريب المبالغ</label>
+                                    <select class="input-field">
+                                        <option selected>بدون تقريب</option>
+                                        <option>أقرب دينار</option>
+                                        <option>٠.٥ دينار</option>
+                                        <option>أقرب ١٠٠ درهم</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Minimum Order -->
+                            <div>
+                                <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">الحد الأدنى للطلب (د.ل)</label>
+                                <div class="relative">
+                                    <input type="number" value="5" class="input-field pr-10" placeholder="٠" dir="ltr"/>
+                                    <i class="fa-solid fa-arrow-down-short-wide absolute right-3 top-1/2 -translate-y-1/2 text-brand text-sm"></i>
+                                </div>
+                                <p class="text-[10px] text-muted mt-1 font-semibold">اتركه ٠ لعدم تطبيق حد أدنى</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ---- SECTION 3: Operations / Toggles ---- -->
+                    <div id="section-operations" class="settings-card bg-surface rounded-xl2 border border-border shadow-sm overflow-hidden">
+                        <div class="section-title-bar px-4 py-3 flex items-center gap-3">
+                            <div class="w-8 h-8 bg-orange rounded-xl flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-sliders text-white text-sm"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-extrabold text-gray-800 text-sm leading-tight">إعدادات التشغيل</h2>
+                                <p class="text-[10px] text-muted font-semibold">طباعة، تنبيهات، وضبط العمليات</p>
+                            </div>
+                        </div>
+
+                        <div class="px-4 py-4 flex flex-col divide-y divide-border">
+
+                            <!-- Toggle: Auto Print Receipt -->
+                            <div class="flex items-center justify-between py-3.5 gap-4">
+                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                    <div class="w-9 h-9 bg-brand-light rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <i class="fa-solid fa-print text-brand text-sm"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-gray-800 leading-tight">طباعة الفاتورة تلقائياً</p>
+                                        <p class="text-[11px] text-muted font-semibold">طباعة عند إتمام كل طلب فوراً</p>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch flex-shrink-0">
+                                    <input type="checkbox" checked id="toggle-print"/>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- Toggle: Kitchen Display -->
+                            <div class="flex items-center justify-between py-3.5 gap-4">
+                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                    <div class="w-9 h-9 bg-orange-light rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <i class="fa-solid fa-desktop text-orange text-sm"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-gray-800 leading-tight">شاشة المطبخ (KDS)</p>
+                                        <p class="text-[11px] text-muted font-semibold">إرسال الطلبات لشاشة المطبخ</p>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch flex-shrink-0">
+                                    <input type="checkbox" checked id="toggle-kds"/>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- Toggle: Low Stock Alert -->
+                            <div class="flex items-center justify-between py-3.5 gap-4">
+                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                    <div class="w-9 h-9 bg-amber-light rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <i class="fa-solid fa-bell text-amber text-sm"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-gray-800 leading-tight">تنبيهات المخزون المنخفض</p>
+                                        <p class="text-[11px] text-muted font-semibold">إشعار فوري عند نقص الأصناف</p>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch flex-shrink-0">
+                                    <input type="checkbox" checked id="toggle-stock-alert"/>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- Toggle: Allow Discount -->
+                            <div class="flex items-center justify-between py-3.5 gap-4">
+                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                    <div class="w-9 h-9 bg-green-light rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <i class="fa-solid fa-tag text-green text-sm"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-gray-800 leading-tight">السماح بالخصومات</p>
+                                        <p class="text-[11px] text-muted font-semibold">تفعيل حقل الخصم في نقطة البيع</p>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch flex-shrink-0">
+                                    <input type="checkbox" checked id="toggle-discount"/>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- Toggle: Require PIN for Void -->
+                            <div class="flex items-center justify-between py-3.5 gap-4">
+                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                    <div class="w-9 h-9 bg-danger-light rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <i class="fa-solid fa-lock text-danger text-sm"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-gray-800 leading-tight">تأمين إلغاء الطلبات بـ PIN</p>
+                                        <p class="text-[11px] text-muted font-semibold">يتطلب موافقة المدير لإلغاء أي طلب</p>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch flex-shrink-0">
+                                    <input type="checkbox" checked id="toggle-pin-void"/>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- Toggle: Offline Mode -->
+                            <div class="flex items-center justify-between py-3.5 gap-4">
+                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                    <div class="w-9 h-9 bg-brand-light rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <i class="fa-solid fa-wifi text-brand text-sm"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-gray-800 leading-tight">وضع العمل دون إنترنت</p>
+                                        <p class="text-[11px] text-muted font-semibold">حفظ البيانات محلياً ومزامنتها لاحقاً</p>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch flex-shrink-0">
+                                    <input type="checkbox" id="toggle-offline"/>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- Toggle: Allow Refund -->
+                            <div class="flex items-center justify-between py-3.5 gap-4">
+                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                    <div class="w-9 h-9 bg-amber-light rounded-xl flex items-center justify-center flex-shrink-0">
+                                        <i class="fa-solid fa-rotate-left text-amber text-sm"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-gray-800 leading-tight">السماح بالاسترداد</p>
+                                        <p class="text-[11px] text-muted font-semibold">تفعيل خيار استرداد المبالغ للعملاء</p>
+                                    </div>
+                                </div>
+                                <label class="toggle-switch flex-shrink-0">
+                                    <input type="checkbox" id="toggle-refund"/>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- ---- SECTION 4: Printer Settings ---- -->
+                    <div id="section-printer" class="settings-card bg-surface rounded-xl2 border border-border shadow-sm overflow-hidden">
+                        <div class="section-title-bar px-4 py-3 flex items-center gap-3">
+                            <div class="w-8 h-8 bg-brand rounded-xl flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-print text-white text-sm"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-extrabold text-gray-800 text-sm leading-tight">إعدادات الطباعة</h2>
+                                <p class="text-[10px] text-muted font-semibold">تخصيص الفاتورة والطابعة</p>
+                            </div>
+                        </div>
+
+                        <div class="px-4 py-4 flex flex-col gap-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">اسم الطابعة</label>
+                                    <div class="relative">
+                                        <input type="text" value="Epson TM-T82III" class="input-field pr-10" dir="ltr"/>
+                                        <i class="fa-solid fa-print absolute right-3 top-1/2 -translate-y-1/2 text-brand text-sm"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">حجم الورق</label>
+                                    <select class="input-field">
+                                        <option selected>٨٠ مم (معياري)</option>
+                                        <option>٥٨ مم</option>
+                                        <option>٥٧ مم</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Receipt Footer Note -->
+                            <div>
+                                <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">نص تذييل الفاتورة</label>
+                                <textarea rows="2" class="input-field resize-none" style="height:auto; min-height:72px;" placeholder="مثال: شكراً لزيارتكم! نتمنى لكم وجبة شهية.">شكراً لزيارتكم — نسعد بخدمتكم دائماً 🌿</textarea>
+                            </div>
+
+                            <!-- Print Copies -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">عدد نسخ الفاتورة</label>
+                                    <div class="flex items-center gap-2">
+                                        <button id="dec-copies" class="w-10 h-10 bg-canvas border border-border rounded-xl flex items-center justify-center text-gray-600 hover:border-brand hover:text-brand transition-colors font-bold text-lg leading-none">−</button>
+                                        <input type="number" id="copies-input" value="1" min="1" max="5" class="input-field text-center font-extrabold" style="max-width: 70px;" dir="ltr"/>
+                                        <button id="inc-copies" class="w-10 h-10 bg-canvas border border-border rounded-xl flex items-center justify-center text-gray-600 hover:border-brand hover:text-brand transition-colors font-bold text-lg leading-none">+</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-extrabold text-gray-600 mb-1.5 block">اتجاه الطباعة</label>
+                                    <select class="input-field">
+                                        <option selected>عربي (RTL)</option>
+                                        <option>إنجليزي (LTR)</option>
+                                        <option>ثنائي اللغة</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ---- SECTION 5: Danger Zone ---- -->
+                    <div id="section-danger" class="settings-card bg-surface rounded-xl2 border border-danger/30 shadow-sm overflow-hidden mb-4">
+                        <div class="px-4 py-3 flex items-center gap-3 bg-danger-light/60 border-b border-danger/20" style="border-right: 4px solid #e84c3d;">
+                            <div class="w-8 h-8 bg-danger rounded-xl flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-triangle-exclamation text-white text-sm"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-extrabold text-danger text-sm leading-tight">منطقة الخطر</h2>
+                                <p class="text-[10px] text-muted font-semibold">إجراءات لا يمكن التراجع عنها — تتطلب PIN المدير</p>
+                            </div>
+                            <span class="badge-section tag-manager mr-auto">مدير فقط</span>
+                        </div>
+                        <div class="px-4 py-4 flex flex-col md:flex-row gap-3">
+                            <button id="reset-shift-btn" class="flex-1 flex items-center gap-3 bg-canvas border border-danger/30 rounded-xl px-4 py-3 min-h-[56px] hover:bg-danger-light hover:border-danger transition-colors group">
+                                <div class="w-9 h-9 bg-danger-light rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-danger/20 transition-colors">
+                                    <i class="fa-solid fa-rotate text-danger text-sm"></i>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-extrabold text-danger leading-tight">إعادة ضبط الوردية</p>
+                                    <p class="text-[11px] text-muted font-semibold">مسح بيانات الوردية الحالية</p>
+                                </div>
+                            </button>
+                            <button id="clear-data-btn" class="flex-1 flex items-center gap-3 bg-canvas border border-danger/30 rounded-xl px-4 py-3 min-h-[56px] hover:bg-danger-light hover:border-danger transition-colors group">
+                                <div class="w-9 h-9 bg-danger-light rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-danger/20 transition-colors">
+                                    <i class="fa-solid fa-trash-can text-danger text-sm"></i>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-extrabold text-danger leading-tight">مسح بيانات الفرع</p>
+                                    <p class="text-[11px] text-muted font-semibold">حذف الكاش والبيانات المحلية</p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ===== RIGHT: SUMMARY / PREVIEW CARD ===== -->
+                <div id="settings-summary-col" class="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
+
+                    <!-- Branch Preview Card -->
+                    <div id="branch-preview-card" class="preview-card rounded-xl2 p-4 text-white shadow-lg shadow-brand/30 overflow-hidden relative">
+                        <div class="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full -translate-x-10 -translate-y-10"></div>
+                        <div class="absolute bottom-0 right-0 w-24 h-24 bg-white/8 rounded-full translate-x-6 translate-y-6"></div>
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2.5 mb-3">
+                                <div class="w-10 h-10 bg-white/25 rounded-xl2 flex items-center justify-center">
+                                    <i class="fa-solid fa-store text-white text-base"></i>
+                                </div>
+                                <div>
+                                    <p class="text-[10px] font-semibold text-white/70">معاينة الفرع</p>
+                                    <p class="text-sm font-extrabold leading-tight">فرع وسط المدينة</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-col gap-2">
+                                <div class="flex items-center gap-2 text-white/85">
+                                    <i class="fa-solid fa-location-dot text-xs w-4 text-center"></i>
+                                    <span class="text-xs font-semibold">شارع عمر المختار، طرابلس</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-white/85">
+                                    <i class="fa-solid fa-phone text-xs w-4 text-center"></i>
+                                    <span class="text-xs font-semibold" dir="ltr">091-123-4567</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-white/85">
+                                    <i class="fa-solid fa-clock text-xs w-4 text-center"></i>
+                                    <span class="text-xs font-semibold">٠٨:٠٠ — ٢٣:٠٠</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-white/85">
+                                    <i class="fa-solid fa-money-bill text-xs w-4 text-center"></i>
+                                    <span class="text-xs font-semibold">د.ل — بدون ضريبة</span>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-3 border-t border-white/25 flex items-center gap-1.5">
+                                <div class="w-2 h-2 bg-green-300 rounded-full sync-dot"></div>
+                                <span class="text-[11px] font-bold text-white/80">متزامن — آخر تحديث الآن</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Settings Status Summary -->
+                    <div id="settings-status-card" class="bg-surface rounded-xl2 border border-border shadow-sm p-4">
+                        <h3 class="text-xs font-extrabold text-gray-700 mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-brand"></i>
+                            ملخص الإعدادات
+                        </h3>
+                        <div class="flex flex-col gap-2.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-print text-brand text-[10px]"></i>
+                                    طباعة تلقائية
+                                </span>
+                                <span id="status-print" class="text-[11px] font-extrabold text-green flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> مفعّل
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-desktop text-orange text-[10px]"></i>
+                                    شاشة المطبخ
+                                </span>
+                                <span id="status-kds" class="text-[11px] font-extrabold text-green flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> مفعّل
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-bell text-amber text-[10px]"></i>
+                                    تنبيهات المخزون
+                                </span>
+                                <span id="status-stock" class="text-[11px] font-extrabold text-green flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> مفعّل
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-tag text-green text-[10px]"></i>
+                                    الخصومات
+                                </span>
+                                <span id="status-discount" class="text-[11px] font-extrabold text-green flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> مفعّل
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-lock text-danger text-[10px]"></i>
+                                    PIN الإلغاء
+                                </span>
+                                <span id="status-pin" class="text-[11px] font-extrabold text-green flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> مفعّل
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-wifi text-brand text-[10px]"></i>
+                                    وضع أوفلاين
+                                </span>
+                                <span id="status-offline" class="text-[11px] font-extrabold text-muted flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-xmark text-[10px]"></i> معطّل
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-rotate-left text-amber text-[10px]"></i>
+                                    الاسترداد
+                                </span>
+                                <span id="status-refund" class="text-[11px] font-extrabold text-muted flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-xmark text-[10px]"></i> معطّل
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- App Version Info -->
+                    <div id="app-info-card" class="bg-surface rounded-xl2 border border-border shadow-sm p-4">
+                        <h3 class="text-xs font-extrabold text-gray-700 mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-info text-brand"></i>
+                            معلومات النظام
+                        </h3>
+                        <div class="flex flex-col gap-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-semibold text-muted">إصدار التطبيق</span>
+                                <span class="text-[11px] font-extrabold text-gray-700">v3.2.1</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-semibold text-muted">آخر مزامنة</span>
+                                <span class="text-[11px] font-extrabold text-green">منذ ٥ دقائق</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-semibold text-muted">البيئة</span>
+                                <span class="text-[11px] font-extrabold text-gray-700">إنتاج</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-semibold text-muted">المنطقة الزمنية</span>
+                                <span class="text-[11px] font-extrabold text-gray-700" dir="ltr">UTC+2 (Libya)</span>
+                            </div>
+                            <div class="section-divider my-1"></div>
+                            <button class="w-full bg-canvas border border-border rounded-xl py-2 text-xs font-bold text-muted hover:border-brand hover:text-brand transition-colors min-h-[36px] flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-rotate text-xs"></i>
+                                التحقق من التحديثات
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Save / Discard Footer -->
+                    <div id="quick-actions-card" class="bg-surface rounded-xl2 border border-border shadow-sm p-4 flex flex-col gap-2.5">
+                        <button id="save-btn-sidebar" class="save-btn w-full bg-brand text-white font-extrabold text-sm py-3 rounded-xl min-h-[48px] flex items-center justify-center gap-2 hover:bg-brand-dark transition-colors shadow-md shadow-brand/25">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            حفظ جميع التغييرات
+                        </button>
+                        <button class="w-full bg-canvas border border-border text-gray-600 font-bold text-sm py-3 rounded-xl min-h-[44px] flex items-center justify-center gap-2 hover:border-danger hover:text-danger transition-colors">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                            تجاهل التغييرات
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ===== SUCCESS OVERLAY ===== -->
+<div id="success-overlay" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" style="backdrop-filter: blur(4px);">
+    <div class="success-overlay bg-surface rounded-xl2 shadow-2xl border border-border p-8 flex flex-col items-center gap-4 max-w-sm w-full text-center">
+        <div class="w-16 h-16 bg-brand-light rounded-full flex items-center justify-center">
+            <i class="fa-solid fa-circle-check text-brand text-3xl"></i>
+        </div>
+        <div>
+            <h3 class="font-extrabold text-gray-800 text-lg">تم الحفظ بنجاح!</h3>
+            <p class="text-sm text-muted font-semibold mt-1">تم تحديث إعدادات الفرع وسيتم مزامنتها قريباً</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div class="w-2 h-2 bg-green rounded-full sync-dot"></div>
+            <span class="text-xs text-green font-bold">جاري المزامنة...</span>
+        </div>
+        <button id="close-success-btn" class="bg-brand text-white font-extrabold text-sm px-8 py-2.5 rounded-xl min-h-[44px] hover:bg-brand-dark transition-colors w-full">
+            حسناً
+        </button>
+    </div>
+</div>
+
+<!-- ===== PIN AUTHORIZATION SHEET (for Danger Zone) ===== -->
+<div id="pin-overlay" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end justify-center" style="backdrop-filter: blur(4px);">
+    <div id="pin-sheet" class="bg-surface rounded-t-2xl shadow-2xl border border-border w-full max-w-md p-6 animate-slide-up">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 bg-danger-light rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-lock text-danger text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="font-extrabold text-gray-800 text-sm">تأكيد هوية المدير</h3>
+                    <p class="text-[11px] text-muted font-semibold" id="pin-action-label">أدخل رمز PIN للمتابعة</p>
+                </div>
+            </div>
+            <button id="close-pin-btn" class="w-8 h-8 bg-canvas border border-border rounded-lg flex items-center justify-center text-muted hover:text-danger hover:border-danger transition-colors">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+        <!-- PIN Dots -->
+        <div class="flex justify-center gap-4 my-4">
+            <div class="w-4 h-4 rounded-full border-2 border-border bg-canvas pin-dot" id="dot-1"></div>
+            <div class="w-4 h-4 rounded-full border-2 border-border bg-canvas pin-dot" id="dot-2"></div>
+            <div class="w-4 h-4 rounded-full border-2 border-border bg-canvas pin-dot" id="dot-3"></div>
+            <div class="w-4 h-4 rounded-full border-2 border-border bg-canvas pin-dot" id="dot-4"></div>
+        </div>
+        <!-- Numpad -->
+        <div class="grid grid-cols-3 gap-2.5 mt-2">
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="1">1</button>
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="2">2</button>
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="3">3</button>
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="4">4</button>
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="5">5</button>
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="6">6</button>
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="7">7</button>
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="8">8</button>
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="9">9</button>
+            <div></div>
+            <button class="pin-key bg-canvas border border-border rounded-xl font-extrabold text-gray-700 text-xl min-h-[56px] hover:bg-brand-light hover:border-brand transition-colors" data-key="0">0</button>
+            <button id="pin-backspace" class="bg-danger-light border border-danger/30 rounded-xl flex items-center justify-center min-h-[56px] hover:bg-danger/15 transition-colors">
+                <i class="fa-solid fa-delete-left text-danger text-lg"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ===== Toggle Status Summary =====
+    const toggleMap = [
+        { id: 'toggle-print', statusId: 'status-print' },
+        { id: 'toggle-kds', statusId: 'status-kds' },
+        { id: 'toggle-stock-alert', statusId: 'status-stock' },
+        { id: 'toggle-discount', statusId: 'status-discount' },
+        { id: 'toggle-pin-void', statusId: 'status-pin' },
+        { id: 'toggle-offline', statusId: 'status-offline' },
+        { id: 'toggle-refund', statusId: 'status-refund' },
+    ];
+
+    toggleMap.forEach(({ id, statusId }) => {
+        const toggle = document.getElementById(id);
+        const statusEl = document.getElementById(statusId);
+        if (!toggle || !statusEl) return;
+        toggle.addEventListener('change', function() {
+            if (this.checked) {
+                statusEl.className = 'text-[11px] font-extrabold text-green flex items-center gap-1';
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check text-[10px]"></i> مفعّل';
+            } else {
+                statusEl.className = 'text-[11px] font-extrabold text-muted flex items-center gap-1';
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark text-[10px]"></i> معطّل';
+            }
+        });
+    });
+
+    // ===== Save Buttons → Success Overlay =====
+    const successOverlay = document.getElementById('success-overlay');
+    const closeSuccessBtn = document.getElementById('close-success-btn');
+
+    ['save-all-btn', 'save-btn-sidebar'].forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            btn.addEventListener('click', () => {
+                successOverlay.classList.remove('hidden');
+            });
+        }
+    });
+    closeSuccessBtn.addEventListener('click', () => {
+        successOverlay.classList.add('hidden');
+    });
+
+    // ===== Print Copies Stepper =====
+    const copiesInput = document.getElementById('copies-input');
+    document.getElementById('inc-copies').addEventListener('click', () => {
+        let val = parseInt(copiesInput.value) || 1;
+        if (val < 5) copiesInput.value = val + 1;
+    });
+    document.getElementById('dec-copies').addEventListener('click', () => {
+        let val = parseInt(copiesInput.value) || 1;
+        if (val > 1) copiesInput.value = val - 1;
+    });
+
+    // ===== PIN Sheet =====
+    const pinOverlay = document.getElementById('pin-overlay');
+    const closePinBtn = document.getElementById('close-pin-btn');
+    const pinActionLabel = document.getElementById('pin-action-label');
+    let pinValue = '';
+
+    function openPin(label) {
+        pinValue = '';
+        updatePinDots();
+        pinActionLabel.textContent = label;
+        pinOverlay.classList.remove('hidden');
+    }
+
+    closePinBtn.addEventListener('click', () => {
+        pinOverlay.classList.add('hidden');
+        pinValue = '';
+        updatePinDots();
+    });
+
+    document.getElementById('reset-shift-btn').addEventListener('click', () => {
+        openPin('إعادة ضبط الوردية — أدخل رمز PIN للتأكيد');
+    });
+    document.getElementById('clear-data-btn').addEventListener('click', () => {
+        openPin('مسح بيانات الفرع — أدخل رمز PIN للتأكيد');
+    });
+
+    document.querySelectorAll('.pin-key').forEach(key => {
+        key.addEventListener('click', function() {
+            if (pinValue.length < 4) {
+                pinValue += this.dataset.key;
+                updatePinDots();
+                if (pinValue.length === 4) {
+                    setTimeout(() => {
+                        pinOverlay.classList.add('hidden');
+                        pinValue = '';
+                        updatePinDots();
+                    }, 400);
+                }
+            }
+        });
+    });
+
+    document.getElementById('pin-backspace').addEventListener('click', () => {
+        pinValue = pinValue.slice(0, -1);
+        updatePinDots();
+    });
+
+    function updatePinDots() {
+        for (let i = 1; i <= 4; i++) {
+            const dot = document.getElementById('dot-' + i);
+            if (i <= pinValue.length) {
+                dot.classList.add('bg-brand', 'border-brand');
+                dot.classList.remove('bg-canvas', 'border-border');
+            } else {
+                dot.classList.remove('bg-brand', 'border-brand');
+                dot.classList.add('bg-canvas', 'border-border');
+            }
+        }
+    }
+</script>
+</body>
+</html>

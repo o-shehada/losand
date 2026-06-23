@@ -74,6 +74,7 @@ app_logo_url = "/assets/losand/images/losand-logo.jpg"
 
 website_route_rules = [
 	{"from_route": "/los-andalus/manufacture/<path:app_path>", "to_route": "los-andalus/manufacture"},
+	{"from_route": "/los-andalus/pos/<path:app_path>", "to_route": "los-andalus/pos"},
 ]
 
 # Generators

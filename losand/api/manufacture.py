@@ -142,20 +142,30 @@ def get_final_products(category):
 
 @frappe.whitelist()
 def get_category_raw_materials(category, warehouse=None):
-	"""Raw materials whose classification includes the category, with valuation + stock."""
+	"""Raw materials declared on the final products of the category, with valuation + stock."""
 	import html
 
 	warehouse = warehouse or cfg().source
+	# union of raw materials listed in `classification` across all final products in the category
+	rm_codes = frappe.get_all(
+		"Los Andalus Item Raw Material",
+		filters={
+			"parenttype": "Item",
+			"parentfield": "classification",
+			"parent": ["in", frappe.get_all("Item", {"is_final_product": 1, "product_category": category, "disabled": 0}, pluck="name")],
+		},
+		pluck="raw_material",
+		distinct=True,
+	)
 	items = frappe.get_all(
 		"Item",
 		filters=[
-			["is_raw_material", "=", 1],
+			["item_code", "in", rm_codes],
 			["disabled", "=", 0],
-			["Los Andalus Item Category", "product_category", "=", category],
 		],
 		fields=["item_code", "item_name", "description", "stock_uom", "valuation_rate"],
 		order_by="item_name asc",
-	)
+	) if rm_codes else []
 	codes = [i.item_code for i in items]
 	bin_map = _stock_map(codes, warehouse)
 	return [

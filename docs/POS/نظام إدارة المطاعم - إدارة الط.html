@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script> window.FontAwesomeConfig = { autoReplaceSvg: 'nest'};</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        canvas: '#f7fbf0',
+                        sidebar: '#d4e8b0',
+                        brand: '#8cc63f',
+                        'brand-dark': '#6fa832',
+                        'brand-light': '#e8f5d0',
+                        danger: '#e84c3d',
+                        'danger-light': '#fde8e6',
+                        orange: '#E8490F',
+                        green: '#3DAA6F',
+                        amber: '#F5A623',
+                        muted: '#8a9a7a',
+                        surface: '#ffffff',
+                        border: '#ddeec8',
+                    },
+                    fontFamily: {
+                        cairo: ['Cairo', 'sans-serif'],
+                    },
+                    borderRadius: {
+                        'xl2': '16px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { display: none; }
+        * { font-family: 'Cairo', sans-serif; }
+        .nav-item.active { background: #8cc63f; color: white; }
+        .nav-item { transition: all 0.2s ease; }
+        .order-card { transition: all 0.22s ease; }
+        .order-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(140,198,63,0.18); }
+        .sync-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .shift-pill { background: linear-gradient(135deg, #8cc63f, #6fa832); }
+        .col-new { border-top: 3px solid #8cc63f; }
+        .col-prep { border-top: 3px solid #F5A623; }
+        .col-ready { border-top: 3px solid #3DAA6F; }
+        .col-done { border-top: 3px solid #8a9a7a; }
+        .time-fresh { color: #3DAA6F; background: rgba(61,170,111,0.12); }
+        .time-warn { color: #F5A623; background: rgba(245,166,35,0.12); }
+        .time-late { color: #e84c3d; background: rgba(232,76,61,0.12); }
+        .badge-new { background: rgba(140,198,63,0.15); color: #6fa832; border: 1px solid #8cc63f; }
+        .badge-prep { background: rgba(245,166,35,0.15); color: #c4820a; border: 1px solid #F5A623; }
+        .badge-ready { background: rgba(61,170,111,0.15); color: #2d7d52; border: 1px solid #3DAA6F; }
+        .badge-done { background: rgba(138,154,122,0.15); color: #5a6a4a; border: 1px solid #8a9a7a; }
+        .btn-advance { transition: all 0.18s; }
+        .btn-advance:active { transform: scale(0.95); }
+        .kanban-col { min-width: 0; }
+        .scrollable-col { overflow-y: auto; max-height: calc(100vh - 130px); }
+        .order-type-dine { background: rgba(140,198,63,0.12); color: #6fa832; }
+        .order-type-take { background: rgba(245,166,35,0.12); color: #c4820a; }
+        .order-type-delivery { background: rgba(232,76,61,0.12); color: #c03030; }
+    </style>
+</head>
+<body class="bg-canvas font-cairo overflow-hidden" dir="rtl">
+
+<div id="app-root" class="flex flex-row-reverse w-full" style="height: 100dvh; overflow: hidden;">
+
+    <!-- ===== RIGHT SIDEBAR NAV ===== -->
+    <aside id="sidebar" class="flex flex-col items-center bg-sidebar w-16 md:w-20 py-4 gap-2 border-l border-border flex-shrink-0 relative z-20">
+        <div class="w-10 h-10 md:w-12 md:h-12 bg-brand rounded-xl2 flex items-center justify-center mb-3 shadow-md">
+            <i class="fa-solid fa-utensils text-white text-base md:text-lg"></i>
+        </div>
+        <div class="flex flex-col gap-2 w-full px-2 mt-2">
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-cash-register text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">نقاط البيع</span>
+            </button>
+            <button class="nav-item active flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px]">
+                <i class="fa-solid fa-receipt text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">الطلبات</span>
+            </button>
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-boxes-stacked text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">المخزون</span>
+            </button>
+            <button class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] text-muted hover:bg-brand-light">
+                <i class="fa-solid fa-chart-bar text-lg"></i>
+                <span class="text-[9px] font-bold leading-tight">التقارير</span>
+            </button>
+        </div>
+        <div class="mt-auto flex flex-col items-center gap-3">
+            <div class="flex flex-col items-center gap-1">
+                <div class="w-2.5 h-2.5 bg-green rounded-full sync-dot"></div>
+                <span class="text-[8px] text-muted font-semibold">متزامن</span>
+            </div>
+            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg" class="w-9 h-9 rounded-full border-2 border-brand object-cover" alt="user"/>
+        </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main id="main-content" class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+        <!-- TOP HEADER -->
+        <header id="orders-header" class="bg-surface border-b border-border px-4 py-2.5 flex items-center justify-between gap-3 flex-shrink-0 shadow-sm">
+            <!-- Left: Title + Branch -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-brand-light rounded-xl flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-list-check text-brand text-base"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-gray-800 text-base md:text-lg leading-tight">إدارة الطلبات</h1>
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-store text-brand text-xs"></i>
+                        <span class="text-xs text-muted font-semibold">فرع وسط المدينة</span>
+                        <span class="text-xs text-muted">·</span>
+                        <i class="fa-regular fa-calendar text-muted text-xs"></i>
+                        <span class="text-xs text-muted">الأربعاء، ٢٢ يناير ٢٠٢٥</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Controls -->
+            <div class="flex items-center gap-2 flex-wrap justify-end">
+                <!-- Search -->
+                <div class="relative">
+                    <input type="text" placeholder="بحث برقم الطلب..." class="bg-canvas border border-border rounded-xl pr-4 pl-9 py-2 text-sm focus:outline-none focus:border-brand text-gray-700 w-44 md:w-52 min-h-[44px]"/>
+                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm"></i>
+                </div>
+                <!-- Shift Pill -->
+                <div class="shift-pill text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <i class="fa-solid fa-sun text-yellow-200 text-xs"></i>
+                    <span>وردية الصباح</span>
+                </div>
+                <!-- Role Badge -->
+                <div class="bg-amber/15 border border-amber text-amber text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <i class="fa-solid fa-user-tie text-xs"></i>
+                    <span>كاشير</span>
+                </div>
+                <!-- Clear Completed -->
+                <button class="bg-danger-light border border-danger/30 text-danger text-xs font-bold px-3 py-2 rounded-xl min-h-[44px] flex items-center gap-1.5 hover:bg-danger hover:text-white transition-colors">
+                    <i class="fa-solid fa-broom text-xs"></i>
+                    <span class="hidden md:inline">مسح المكتملة</span>
+                </button>
+                <!-- Auto-refresh indicator -->
+                <div class="flex items-center gap-1.5 bg-brand-light border border-brand/30 rounded-xl px-2.5 py-2 min-h-[44px]">
+                    <i class="fa-solid fa-rotate text-brand text-xs sync-dot"></i>
+                    <span class="text-xs text-brand font-bold hidden md:inline">تحديث تلقائي</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- COLUMN HEADER STATS BAR -->
+        <div id="stats-bar" class="bg-surface border-b border-border px-4 py-2 flex items-center gap-4 flex-shrink-0">
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-muted font-semibold">إجمالي الطلبات النشطة:</span>
+                <span class="bg-brand text-white text-xs font-extrabold px-2.5 py-0.5 rounded-full">١٢ طلب</span>
+            </div>
+            <div class="h-4 w-px bg-border"></div>
+            <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-brand"></div>
+                <span class="text-xs text-muted font-semibold">جديدة: <span class="text-gray-700 font-bold">٤</span></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-amber"></div>
+                <span class="text-xs text-muted font-semibold">قيد التحضير: <span class="text-gray-700 font-bold">٣</span></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-green"></div>
+                <span class="text-xs text-muted font-semibold">جاهزة: <span class="text-gray-700 font-bold">٣</span></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-muted"></div>
+                <span class="text-xs text-muted font-semibold">تم التسليم: <span class="text-gray-700 font-bold">٢</span></span>
+            </div>
+        </div>
+
+        <!-- KANBAN BOARD -->
+        <div id="kanban-board" class="flex-1 overflow-hidden p-3 md:p-4">
+            <div class="flex gap-3 h-full">
+
+                <!-- ===== COLUMN 1: جديدة ===== -->
+                <div id="col-new" class="kanban-col flex-1 flex flex-col bg-surface rounded-xl2 border border-border col-new overflow-hidden shadow-sm">
+                    <!-- Column Header -->
+                    <div class="px-3 py-3 border-b border-border bg-brand-light/60 flex items-center justify-between flex-shrink-0">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-brand"></div>
+                            <span class="font-extrabold text-gray-800 text-sm">جديدة</span>
+                        </div>
+                        <span class="badge-new text-xs font-extrabold px-2.5 py-1 rounded-full">٤ طلبات</span>
+                    </div>
+                    <!-- Cards -->
+                    <div class="scrollable-col flex-1 p-2 space-y-2.5">
+
+                        <!-- Order Card N1 -->
+                        <div class="order-card bg-canvas rounded-xl border border-border overflow-hidden cursor-pointer">
+                            <div class="px-3 py-2 bg-surface border-b border-border flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٤٧</span>
+                                    <span class="order-type-dine text-[10px] font-bold px-2 py-0.5 rounded-full">داخلي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-hashtag text-[9px]"></i> طاولة ٣
+                                    </span>
+                                    <span class="time-fresh text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-clock text-[9px]"></i> ٢ دقيقة
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">٢× برجر كلاسيك</span>
+                                    <span class="text-brand font-bold text-xs">٢٥.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">١× بيتزا مارغريتا</span>
+                                    <span class="text-brand font-bold text-xs">٢٢.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">٢× عصير برتقال</span>
+                                    <span class="text-brand font-bold text-xs">١٦.٠٠ د.ل</span>
+                                </div>
+                                <div class="mt-1.5 bg-amber/10 border border-amber/30 rounded-lg px-2 py-1 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-note-sticky text-amber text-xs"></i>
+                                    <span class="text-xs text-amber font-semibold">بدون بصل في البرجر</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-border flex items-center justify-between bg-surface">
+                                <span class="text-xs text-muted font-semibold">٦٣.٠٠ د.ل</span>
+                                <button class="btn-advance bg-brand text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:bg-brand-dark transition-colors shadow-sm shadow-brand/20">
+                                    <i class="fa-solid fa-fire-burner text-xs"></i> إرسال للمطبخ
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Order Card N2 -->
+                        <div class="order-card bg-canvas rounded-xl border border-border overflow-hidden cursor-pointer">
+                            <div class="px-3 py-2 bg-surface border-b border-border flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٤٦</span>
+                                    <span class="order-type-take text-[10px] font-bold px-2 py-0.5 rounded-full">تيك أواي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-bag-shopping text-[9px]"></i> استلام ذاتي
+                                    </span>
+                                    <span class="time-fresh text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-clock text-[9px]"></i> ٤ دقائق
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">١× شاورما لحم</span>
+                                    <span class="text-brand font-bold text-xs">١٠.٥٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">١× كولا كبيرة</span>
+                                    <span class="text-brand font-bold text-xs">٥.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-border flex items-center justify-between bg-surface">
+                                <span class="text-xs text-muted font-semibold">١٥.٥٠ د.ل</span>
+                                <button class="btn-advance bg-brand text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:bg-brand-dark transition-colors shadow-sm shadow-brand/20">
+                                    <i class="fa-solid fa-fire-burner text-xs"></i> إرسال للمطبخ
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Order Card N3 -->
+                        <div class="order-card bg-canvas rounded-xl border border-border overflow-hidden cursor-pointer">
+                            <div class="px-3 py-2 bg-surface border-b border-border flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٤٥</span>
+                                    <span class="order-type-delivery text-[10px] font-bold px-2 py-0.5 rounded-full">توصيل</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-motorcycle text-[9px]"></i> توصيل
+                                    </span>
+                                    <span class="time-warn text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-clock text-[9px]"></i> ٨ دقائق
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">٣× كفتة مشوية</span>
+                                    <span class="text-brand font-bold text-xs">٥٤.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">١× خبز بيتا</span>
+                                    <span class="text-brand font-bold text-xs">٣.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">٢× ليموناضة</span>
+                                    <span class="text-brand font-bold text-xs">١٢.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-border flex items-center justify-between bg-surface">
+                                <span class="text-xs text-muted font-semibold">٦٩.٠٠ د.ل</span>
+                                <button class="btn-advance bg-brand text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:bg-brand-dark transition-colors shadow-sm shadow-brand/20">
+                                    <i class="fa-solid fa-fire-burner text-xs"></i> إرسال للمطبخ
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Order Card N4 -->
+                        <div class="order-card bg-canvas rounded-xl border border-border overflow-hidden cursor-pointer">
+                            <div class="px-3 py-2 bg-surface border-b border-border flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٤٤</span>
+                                    <span class="order-type-dine text-[10px] font-bold px-2 py-0.5 rounded-full">داخلي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-hashtag text-[9px]"></i> طاولة ٨
+                                    </span>
+                                    <span class="time-warn text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-clock text-[9px]"></i> ١٢ دقيقة
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">١× ستيك لحم</span>
+                                    <span class="text-brand font-bold text-xs">٣٥.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold">١× سلطة سيزر</span>
+                                    <span class="text-brand font-bold text-xs">٩.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-border flex items-center justify-between bg-surface">
+                                <span class="text-xs text-muted font-semibold">٤٤.٠٠ د.ل</span>
+                                <button class="btn-advance bg-brand text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:bg-brand-dark transition-colors shadow-sm shadow-brand/20">
+                                    <i class="fa-solid fa-fire-burner text-xs"></i> إرسال للمطبخ
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- ===== COLUMN 2: قيد التحضير ===== -->
+                <div id="col-prep" class="kanban-col flex-1 flex flex-col bg-surface rounded-xl2 border border-border col-prep overflow-hidden shadow-sm">
+                    <div class="px-3 py-3 border-b border-border flex items-center justify-between flex-shrink-0" style="background: rgba(245,166,35,0.08);">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-amber"></div>
+                            <span class="font-extrabold text-gray-800 text-sm">قيد التحضير</span>
+                        </div>
+                        <span class="badge-prep text-xs font-extrabold px-2.5 py-1 rounded-full">٣ طلبات</span>
+                    </div>
+                    <div class="scrollable-col flex-1 p-2 space-y-2.5">
+
+                        <!-- Order Card P1 -->
+                        <div class="order-card bg-canvas rounded-xl border border-amber/30 overflow-hidden cursor-pointer">
+                            <div class="px-3 py-2 bg-amber/5 border-b border-amber/20 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٤٣</span>
+                                    <span class="order-type-dine text-[10px] font-bold px-2 py-0.5 rounded-full">داخلي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-hashtag text-[9px]"></i> طاولة ٥
+                                    </span>
+                                    <span class="time-warn text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-clock text-[9px]"></i> ١٠ دقائق
+                                    </span>
+                                </div>
+                            </div>
+                            <!-- Progress bar -->
+                            <div class="px-3 pt-2">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[10px] text-muted font-semibold">التقدم</span>
+                                    <span class="text-[10px] text-amber font-bold">٦٠٪</span>
+                                </div>
+                                <div class="w-full bg-border rounded-full h-1.5">
+                                    <div class="bg-amber h-1.5 rounded-full" style="width: 60%"></div>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-4 h-4 rounded-full bg-brand flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-check text-white text-[8px]"></i>
+                                        </div>
+                                        <span class="text-gray-400 font-semibold line-through text-xs">٢× برجر كلاسيك</span>
+                                    </div>
+                                    <span class="text-muted font-bold text-xs">٢٥.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-4 h-4 rounded-full bg-amber/30 flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-fire text-amber text-[8px]"></i>
+                                        </div>
+                                        <span class="text-gray-700 font-semibold text-xs">١× دجاج مشوي</span>
+                                    </div>
+                                    <span class="text-brand font-bold text-xs">١٥.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-4 h-4 rounded-full bg-border flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-clock text-muted text-[8px]"></i>
+                                        </div>
+                                        <span class="text-gray-700 font-semibold text-xs">٢× بطاطس مقلية</span>
+                                    </div>
+                                    <span class="text-brand font-bold text-xs">١٠.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-amber/20 flex items-center justify-between bg-amber/5">
+                                <span class="text-xs text-muted font-semibold">٥٠.٠٠ د.ل</span>
+                                <button class="btn-advance bg-green text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:opacity-90 transition-colors shadow-sm">
+                                    <i class="fa-solid fa-bell-concierge text-xs"></i> جاهز للتسليم
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Order Card P2 -->
+                        <div class="order-card bg-canvas rounded-xl border border-amber/30 overflow-hidden cursor-pointer">
+                            <div class="px-3 py-2 bg-amber/5 border-b border-amber/20 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٤٢</span>
+                                    <span class="order-type-take text-[10px] font-bold px-2 py-0.5 rounded-full">تيك أواي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-bag-shopping text-[9px]"></i> استلام ذاتي
+                                    </span>
+                                    <span class="time-late text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-triangle-exclamation text-[9px]"></i> ١٨ دقيقة
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 pt-2">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[10px] text-muted font-semibold">التقدم</span>
+                                    <span class="text-[10px] text-danger font-bold">٣٠٪</span>
+                                </div>
+                                <div class="w-full bg-border rounded-full h-1.5">
+                                    <div class="bg-danger h-1.5 rounded-full" style="width: 30%"></div>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold text-xs">٢× فطيرة جبن</span>
+                                    <span class="text-brand font-bold text-xs">١٦.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold text-xs">٣× عصير تفاح</span>
+                                    <span class="text-brand font-bold text-xs">١٨.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-amber/20 flex items-center justify-between bg-amber/5">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs text-muted font-semibold">٣٤.٠٠ د.ل</span>
+                                    <span class="bg-danger/10 text-danger text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-circle-exclamation text-[9px]"></i> متأخر
+                                    </span>
+                                </div>
+                                <button class="btn-advance bg-green text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:opacity-90 transition-colors shadow-sm">
+                                    <i class="fa-solid fa-bell-concierge text-xs"></i> جاهز للتسليم
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Order Card P3 -->
+                        <div class="order-card bg-canvas rounded-xl border border-amber/30 overflow-hidden cursor-pointer">
+                            <div class="px-3 py-2 bg-amber/5 border-b border-amber/20 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٤١</span>
+                                    <span class="order-type-dine text-[10px] font-bold px-2 py-0.5 rounded-full">داخلي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-hashtag text-[9px]"></i> طاولة ٢
+                                    </span>
+                                    <span class="time-warn text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-clock text-[9px]"></i> ١٤ دقيقة
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 pt-2">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[10px] text-muted font-semibold">التقدم</span>
+                                    <span class="text-[10px] text-amber font-bold">٨٠٪</span>
+                                </div>
+                                <div class="w-full bg-border rounded-full h-1.5">
+                                    <div class="bg-amber h-1.5 rounded-full" style="width: 80%"></div>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-4 h-4 rounded-full bg-brand flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-check text-white text-[8px]"></i>
+                                        </div>
+                                        <span class="text-gray-400 font-semibold line-through text-xs">١× ستيك لحم</span>
+                                    </div>
+                                    <span class="text-muted font-bold text-xs">٣٥.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-4 h-4 rounded-full bg-amber/30 flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-fire text-amber text-[8px]"></i>
+                                        </div>
+                                        <span class="text-gray-700 font-semibold text-xs">١× بطاطس مشوية</span>
+                                    </div>
+                                    <span class="text-brand font-bold text-xs">٧.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-amber/20 flex items-center justify-between bg-amber/5">
+                                <span class="text-xs text-muted font-semibold">٤٢.٠٠ د.ل</span>
+                                <button class="btn-advance bg-green text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:opacity-90 transition-colors shadow-sm">
+                                    <i class="fa-solid fa-bell-concierge text-xs"></i> جاهز للتسليم
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- ===== COLUMN 3: جاهزة ===== -->
+                <div id="col-ready" class="kanban-col flex-1 flex flex-col bg-surface rounded-xl2 border border-border col-ready overflow-hidden shadow-sm">
+                    <div class="px-3 py-3 border-b border-border flex items-center justify-between flex-shrink-0" style="background: rgba(61,170,111,0.08);">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-green"></div>
+                            <span class="font-extrabold text-gray-800 text-sm">جاهزة</span>
+                        </div>
+                        <span class="badge-ready text-xs font-extrabold px-2.5 py-1 rounded-full">٣ طلبات</span>
+                    </div>
+                    <div class="scrollable-col flex-1 p-2 space-y-2.5">
+
+                        <!-- Order Card R1 - Urgent -->
+                        <div class="order-card bg-canvas rounded-xl border border-green/40 overflow-hidden cursor-pointer" style="box-shadow: 0 0 0 2px rgba(61,170,111,0.15);">
+                            <div class="px-3 py-2 border-b border-green/20 flex items-center justify-between" style="background: rgba(61,170,111,0.08);">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٤٠</span>
+                                    <span class="order-type-dine text-[10px] font-bold px-2 py-0.5 rounded-full">داخلي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-hashtag text-[9px]"></i> طاولة ١
+                                    </span>
+                                    <span class="time-late text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-triangle-exclamation text-[9px]"></i> ٢٢ دقيقة
+                                    </span>
+                                </div>
+                            </div>
+                            <!-- Ready pulse indicator -->
+                            <div class="px-3 pt-2.5 pb-1 flex items-center gap-2">
+                                <div class="flex items-center gap-1.5 bg-green/10 rounded-lg px-2 py-1 border border-green/25 w-full">
+                                    <div class="w-2 h-2 rounded-full bg-green sync-dot flex-shrink-0"></div>
+                                    <span class="text-xs text-green font-bold">جاهز للتسليم — ينتظر النادل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold text-xs">٢× بيتزا مارغريتا</span>
+                                    <span class="text-brand font-bold text-xs">٤٤.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold text-xs">١× سلطة سيزر</span>
+                                    <span class="text-brand font-bold text-xs">٩.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold text-xs">٢× مياه معدنية</span>
+                                    <span class="text-brand font-bold text-xs">٤.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-green/20 flex items-center justify-between" style="background: rgba(61,170,111,0.05);">
+                                <span class="text-xs text-muted font-semibold">٥٧.٠٠ د.ل</span>
+                                <button class="btn-advance bg-brand-dark text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:bg-brand transition-colors shadow-sm">
+                                    <i class="fa-solid fa-motorcycle text-xs"></i> تسليم الطلب
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Order Card R2 -->
+                        <div class="order-card bg-canvas rounded-xl border border-green/40 overflow-hidden cursor-pointer">
+                            <div class="px-3 py-2 border-b border-green/20 flex items-center justify-between" style="background: rgba(61,170,111,0.08);">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٣٩</span>
+                                    <span class="order-type-take text-[10px] font-bold px-2 py-0.5 rounded-full">تيك أواي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-bag-shopping text-[9px]"></i> استلام ذاتي
+                                    </span>
+                                    <span class="time-fresh text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-clock text-[9px]"></i> ١٥ دقيقة
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 pt-2 pb-1 flex items-center gap-2">
+                                <div class="flex items-center gap-1.5 bg-green/10 rounded-lg px-2 py-1 border border-green/25 w-full">
+                                    <div class="w-2 h-2 rounded-full bg-green flex-shrink-0"></div>
+                                    <span class="text-xs text-green font-bold">جاهز للاستلام</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold text-xs">١× شاورما دجاج</span>
+                                    <span class="text-brand font-bold text-xs">١١.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold text-xs">١× عصير مشكل</span>
+                                    <span class="text-brand font-bold text-xs">٧.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-green/20 flex items-center justify-between" style="background: rgba(61,170,111,0.05);">
+                                <span class="text-xs text-muted font-semibold">١٨.٠٠ د.ل</span>
+                                <button class="btn-advance bg-brand-dark text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:bg-brand transition-colors shadow-sm">
+                                    <i class="fa-solid fa-check-double text-xs"></i> تسليم الطلب
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Order Card R3 -->
+                        <div class="order-card bg-canvas rounded-xl border border-green/40 overflow-hidden cursor-pointer">
+                            <div class="px-3 py-2 border-b border-green/20 flex items-center justify-between" style="background: rgba(61,170,111,0.08);">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-800 text-sm">#٠٢٣٨</span>
+                                    <span class="order-type-delivery text-[10px] font-bold px-2 py-0.5 rounded-full">توصيل</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-motorcycle text-[9px]"></i> توصيل
+                                    </span>
+                                    <span class="time-warn text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-clock text-[9px]"></i> ١٩ دقيقة
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 pt-2 pb-1 flex items-center gap-2">
+                                <div class="flex items-center gap-1.5 bg-green/10 rounded-lg px-2 py-1 border border-green/25 w-full">
+                                    <div class="w-2 h-2 rounded-full bg-green flex-shrink-0"></div>
+                                    <span class="text-xs text-green font-bold">ينتظر السائق</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold text-xs">٤× كفتة مشوية</span>
+                                    <span class="text-brand font-bold text-xs">٧٢.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-700 font-semibold text-xs">٢× أرز بالخضار</span>
+                                    <span class="text-brand font-bold text-xs">١٤.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-green/20 flex items-center justify-between" style="background: rgba(61,170,111,0.05);">
+                                <span class="text-xs text-muted font-semibold">٨٦.٠٠ د.ل</span>
+                                <button class="btn-advance bg-brand-dark text-white text-xs font-bold px-4 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:bg-brand transition-colors shadow-sm">
+                                    <i class="fa-solid fa-check-double text-xs"></i> تسليم الطلب
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- ===== COLUMN 4: تم التسليم ===== -->
+                <div id="col-done" class="kanban-col flex-1 flex flex-col bg-surface rounded-xl2 border border-border col-done overflow-hidden shadow-sm">
+                    <div class="px-3 py-3 border-b border-border flex items-center justify-between flex-shrink-0" style="background: rgba(138,154,122,0.08);">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-muted"></div>
+                            <span class="font-extrabold text-gray-800 text-sm">تم التسليم</span>
+                        </div>
+                        <span class="badge-done text-xs font-extrabold px-2.5 py-1 rounded-full">٢ طلبات</span>
+                    </div>
+                    <div class="scrollable-col flex-1 p-2 space-y-2.5">
+
+                        <!-- Order Card D1 -->
+                        <div class="order-card bg-canvas rounded-xl border border-border overflow-hidden cursor-pointer opacity-80">
+                            <div class="px-3 py-2 bg-canvas border-b border-border flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-500 text-sm">#٠٢٣٧</span>
+                                    <span class="bg-muted/10 text-muted text-[10px] font-bold px-2 py-0.5 rounded-full border border-muted/20">داخلي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-muted text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-hashtag text-[9px]"></i> طاولة ٧
+                                    </span>
+                                    <span class="bg-muted/10 text-muted text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-check text-[9px]"></i> ٣٥ دقيقة
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-400 font-semibold text-xs line-through">١× ستيك لحم</span>
+                                    <span class="text-muted font-bold text-xs">٣٥.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-400 font-semibold text-xs line-through">٢× بطاطس مقلية</span>
+                                    <span class="text-muted font-bold text-xs">١٠.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-400 font-semibold text-xs line-through">٢× كولا</span>
+                                    <span class="text-muted font-bold text-xs">١٠.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-border flex items-center justify-between bg-canvas">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-muted font-semibold">٥٥.٠٠ د.ل</span>
+                                    <span class="bg-brand/10 text-brand-dark text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border border-brand/20">
+                                        <i class="fa-solid fa-circle-check text-[9px]"></i> مدفوع
+                                    </span>
+                                </div>
+                                <button class="btn-advance bg-canvas border border-border text-muted text-xs font-bold px-3 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:border-brand hover:text-brand transition-colors">
+                                    <i class="fa-solid fa-print text-xs"></i> فاتورة
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Order Card D2 -->
+                        <div class="order-card bg-canvas rounded-xl border border-border overflow-hidden cursor-pointer opacity-80">
+                            <div class="px-3 py-2 bg-canvas border-b border-border flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-gray-500 text-sm">#٠٢٣٦</span>
+                                    <span class="bg-muted/10 text-muted text-[10px] font-bold px-2 py-0.5 rounded-full border border-muted/20">تيك أواي</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-canvas border border-border text-muted text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-bag-shopping text-[9px]"></i> استلام ذاتي
+                                    </span>
+                                    <span class="bg-muted/10 text-muted text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <i class="fa-solid fa-check text-[9px]"></i> ٤٢ دقيقة
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 space-y-1">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-400 font-semibold text-xs line-through">٣× فطيرة جبن</span>
+                                    <span class="text-muted font-bold text-xs">٢٤.٠٠ د.ل</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-400 font-semibold text-xs line-through">٢× قهوة عربية</span>
+                                    <span class="text-muted font-bold text-xs">٨.٠٠ د.ل</span>
+                                </div>
+                            </div>
+                            <div class="px-3 py-2 border-t border-border flex items-center justify-between bg-canvas">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-muted font-semibold">٣٢.٠٠ د.ل</span>
+                                    <span class="bg-brand/10 text-brand-dark text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border border-brand/20">
+                                        <i class="fa-solid fa-circle-check text-[9px]"></i> مدفوع
+                                    </span>
+                                </div>
+                                <button class="btn-advance bg-canvas border border-border text-muted text-xs font-bold px-3 py-2 rounded-xl min-h-[36px] flex items-center gap-1.5 hover:border-brand hover:text-brand transition-colors">
+                                    <i class="fa-solid fa-print text-xs"></i> فاتورة
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Empty Done Hint -->
+                        <div class="border-2 border-dashed border-border rounded-xl p-4 flex flex-col items-center justify-center text-center gap-2 opacity-60">
+                            <div class="w-10 h-10 bg-canvas rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-check-double text-muted text-base"></i>
+                            </div>
+                            <p class="text-xs text-muted font-semibold">ستظهر الطلبات المكتملة هنا</p>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    // Auto-refresh timer display
+    let refreshTimer = 30;
+    setInterval(() => {
+        refreshTimer--;
+        if (refreshTimer <= 0) refreshTimer = 30;
+    }, 1000);
+
+    // Card hover lift
+    document.querySelectorAll('.order-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.zIndex = '10';
+        });
+        card.addEventListener('mouseleave', function() {
+            this.style.zIndex = '';
+        });
+    });
+
+    // Advance button click feedback
+    document.querySelectorAll('.btn-advance').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const original = this.innerHTML;
+            this.innerHTML = '<i class="fa-solid fa-check text-xs"></i> تم';
+            this.disabled = true;
+            this.style.opacity = '0.7';
+            setTimeout(() => {
+                this.innerHTML = original;
+                this.disabled = false;
+                this.style.opacity = '';
+            }, 1500);
+        });
+    });
+</script>
+</body>
+</html>

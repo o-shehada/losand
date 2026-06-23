@@ -68,7 +68,7 @@ def _ensure_custom_fields():
 				{"fieldname": "is_final_product", "label": "Is Final Product", "fieldtype": "Check", "insert_after": "stock_uom"},
 				{"fieldname": "product_category", "label": "Product Category", "fieldtype": "Link", "options": "Product Category", "insert_after": "is_final_product", "depends_on": "eval:doc.is_final_product"},
 				{"fieldname": "is_raw_material", "label": "Is Raw Material", "fieldtype": "Check", "insert_after": "product_category"},
-				{"fieldname": "classification", "label": "Classification (final products it serves)", "fieldtype": "Table MultiSelect", "options": "Los Andalus Item Category", "insert_after": "is_raw_material", "depends_on": "eval:doc.is_raw_material"},
+				{"fieldname": "classification", "label": "Raw Materials", "fieldtype": "Table MultiSelect", "options": "Los Andalus Item Raw Material", "insert_after": "product_category", "depends_on": "eval:doc.is_final_product", "link_filters": '[["Item","is_raw_material","=",1]]'},
 			]
 		},
 		ignore_validate=True,
@@ -107,11 +107,16 @@ def _ensure_shifts():
 			frappe.get_doc({"doctype": "Shift", "shift_name": name, "start_time": start, "end_time": end}).insert(ignore_permissions=True)
 
 
+def _category_raw_materials(category):
+	"""Raw-material codes that serve the given product category."""
+	return [code for code, _uom, _rate, cats in RAW_MATERIALS if category in cats]
+
+
 def _ensure_final_products():
 	for code, cat, weight, shelf in FINAL_PRODUCTS:
 		if frappe.db.exists("Item", code):
 			continue
-		frappe.get_doc(
+		doc = frappe.get_doc(
 			{
 				"doctype": "Item",
 				"item_code": code,
@@ -128,7 +133,10 @@ def _ensure_final_products():
 				"batch_number_series": _series(code),
 				"shelf_life_in_days": shelf,
 			}
-		).insert(ignore_permissions=True)
+		)
+		for rm in _category_raw_materials(cat):
+			doc.append("classification", {"raw_material": rm})
+		doc.insert(ignore_permissions=True)
 
 
 def _ensure_raw_materials():
@@ -152,8 +160,6 @@ def _ensure_raw_materials():
 				"shelf_life_in_days": 30,
 			}
 		)
-		for c in cats:
-			doc.append("classification", {"product_category": c})
 		doc.insert(ignore_permissions=True)
 
 
@@ -251,8 +257,8 @@ def run():
 	frappe.db.set_value("Los Andalus Manufacture Settings", None, "production_clearing_account", clearing)
 	_ensure_categories()
 	_ensure_shifts()
-	_ensure_final_products()
 	_ensure_raw_materials()
+	_ensure_final_products()
 	_ensure_workbenches()
 	_ensure_link_back_fields()
 	_disable_legacy()
