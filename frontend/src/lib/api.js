@@ -8,6 +8,7 @@ export async function call(method, payload = {}) {
     method: "POST",
     headers,
     credentials: "same-origin",
+    cache: "no-store",
     body: JSON.stringify(payload),
   })
   const data = await response.json().catch(() => ({}))

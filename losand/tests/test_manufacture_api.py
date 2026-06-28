@@ -1,7 +1,7 @@
 import frappe
 import pytest
 
-from losand.api.manufacture import cfg, get_current_session, get_raw_materials, submit_batch
+from losand.api.manufacture import cfg, get_category_raw_materials, get_current_session, submit_batch
 
 
 def test_get_current_session_returns_flags():
@@ -18,8 +18,11 @@ def test_cfg_resolves_config():
 		assert c.get(key)
 
 
-def test_get_raw_materials_shape():
-	rms = get_raw_materials()
+def test_get_category_raw_materials_shape():
+	category = frappe.get_all("Product Category", limit=1, pluck="name")
+	if not category:
+		pytest.skip("No product category configured")
+	rms = get_category_raw_materials(category[0])
 	assert isinstance(rms, list)
 	if rms:
 		first = rms[0]

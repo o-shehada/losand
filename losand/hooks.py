@@ -112,6 +112,7 @@ fixtures = [
 			"Item-product_category",
 			"Item-is_raw_material",
 			"Item-classification",
+			"Stock Entry-custom_production_batch",
 			"Stock Entry-custom_workbench",
 		]]],
 	},

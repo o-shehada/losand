@@ -146,21 +146,42 @@ def get_category_raw_materials(category, warehouse=None):
 	import html
 
 	warehouse = warehouse or cfg().source
+	final_products = frappe.get_all(
+		"Item",
+		{"is_final_product": 1, "product_category": category, "disabled": 0},
+		pluck="name",
+	)
 	# union of raw materials listed in `classification` across all final products in the category
 	rm_codes = frappe.get_all(
 		"Los Andalus Item Raw Material",
 		filters={
 			"parenttype": "Item",
 			"parentfield": "classification",
-			"parent": ["in", frappe.get_all("Item", {"is_final_product": 1, "product_category": category, "disabled": 0}, pluck="name")],
+			"parent": ["in", final_products],
 		},
 		pluck="raw_material",
 		distinct=True,
+	) if final_products else []
+
+	# Compatibility for sites that already had data before `classification`
+	# moved from raw materials to final products. Without this, those categories
+	# intermittently appear empty depending on which records were migrated.
+	legacy_codes = frappe.get_all(
+		"Los Andalus Item Category",
+		filters={
+			"parenttype": "Item",
+			"parentfield": "classification",
+			"product_category": category,
+		},
+		pluck="parent",
+		distinct=True,
 	)
+	rm_codes = sorted(set(rm_codes) | set(legacy_codes))
 	items = frappe.get_all(
 		"Item",
 		filters=[
 			["item_code", "in", rm_codes],
+			["is_raw_material", "=", 1],
 			["disabled", "=", 0],
 		],
 		fields=["item_code", "item_name", "description", "stock_uom", "valuation_rate"],

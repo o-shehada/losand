@@ -13,6 +13,7 @@ const draft = reactive(saved ? JSON.parse(saved) : createDraft())
 if (!draft.workbench) router.replace("/home")
 
 const loading = ref(true)
+const loadError = ref("")
 const totals = computed(() => calc(draft))
 
 async function logout() {
@@ -57,9 +58,9 @@ function tick() {
   liveTime.value = `${h}:${m} ${period}`
 }
 
-onMounted(async () => {
-  tick()
-  timer = setInterval(tick, 60000)
+async function loadProductionData() {
+  loading.value = true
+  loadError.value = ""
   try {
     const [finals, raws] = await Promise.all([
       call("losand.api.manufacture.get_final_products", { category: draft.category }),
@@ -75,23 +76,25 @@ onMounted(async () => {
         if (f) { p.weight = f.weight; p.name = f.name }
       })
     }
-    // Raw materials: seed if empty, else refresh live available/rate (keep entered qty)
-    const rMap = Object.fromEntries((raws || []).map((r) => [r.item_code, r]))
-    if (!draft.raw_materials.length) {
-      draft.raw_materials = (raws || []).map((r) => ({ ...r, available: r.available_qty, qty: 0 }))
-    } else {
-      draft.raw_materials.forEach((m) => {
-        const r = rMap[m.item_code]
-        if (r) { m.available = r.available_qty; m.rate = r.rate; m.unit = r.unit; m.name_ar = r.name_ar }
-      })
-      ;(raws || []).forEach((r) => {
-        if (!draft.raw_materials.some((m) => m.item_code === r.item_code)) draft.raw_materials.push({ ...r, available: r.available_qty, qty: 0 })
-      })
-    }
+    // Replace stale catalogue data with server truth while preserving operator input.
+    const enteredQty = Object.fromEntries(draft.raw_materials.map((m) => [m.item_code, Number(m.qty) || 0]))
+    draft.raw_materials = (raws || []).map((r) => ({
+      ...r,
+      available: r.available_qty,
+      qty: enteredQty[r.item_code] || 0,
+    }))
     syncLossRows(draft.raw_materials)
+  } catch (error) {
+    loadError.value = error.message || "تعذر تحميل بيانات الإنتاج."
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  tick()
+  timer = setInterval(tick, 60000)
+  loadProductionData()
 })
 onUnmounted(() => clearInterval(timer))
 </script>
@@ -132,6 +135,12 @@ onUnmounted(() => clearInterval(timer))
     <main class="px-4 md:px-6 py-6 pb-40 max-w-4xl mx-auto">
       <div v-if="loading" class="text-center text-muted py-12"><i class="fa-solid fa-spinner fa-spin ml-2"></i> جارٍ التحميل...</div>
 
+      <div v-else-if="loadError" class="bg-red-50 border border-red-200 text-danger rounded-2xl p-5 text-center">
+        <p class="font-bold mb-3">تعذر تحميل المنتجات والمواد الخام.</p>
+        <p class="text-xs mb-4">{{ loadError }}</p>
+        <button @click="loadProductionData" class="bg-primary text-white rounded-xl px-5 py-2 text-sm font-bold">إعادة المحاولة</button>
+      </div>
+
       <template v-else>
         <!-- Finished products -->
         <section class="mb-6">
@@ -165,6 +174,10 @@ onUnmounted(() => clearInterval(timer))
             <div class="flex-1 h-px bg-border"></div>
           </div>
           <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+            <div v-if="!draft.raw_materials.length" class="p-6 text-center text-sm text-muted">
+              لا توجد مواد خام مرتبطة بالمنتجات النهائية لهذه الفئة.
+            </div>
+            <template v-else>
             <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted">
               <div class="col-span-4">المادة الخام</div>
               <div class="col-span-1 text-center">الوحدة</div>
@@ -188,6 +201,7 @@ onUnmounted(() => clearInterval(timer))
               <span class="text-xs text-muted">إجمالي تكلفة المواد والفاقد (C)</span>
               <span class="text-sm font-bold text-primary">{{ fmt(totals.C) }} {{ cur }}</span>
             </div>
+            </template>
           </div>
         </section>
 

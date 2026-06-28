@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router"
-import { isAuthenticated, refreshSession } from "@/stores/session"
+import { session, isAuthenticated, refreshSession } from "@/stores/session"
 import LoginView from "@/features/auth/LoginView.vue"
 import ManufactureHome from "@/features/manufacture/ManufactureHome.vue"
 import FoodLoggerEntry from "@/features/food-logger/FoodLoggerEntry.vue"
@@ -49,7 +49,9 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  if (!isAuthenticated()) {
+  // window.boot may contain the user, but it does not contain this app's
+  // capability flags. Hydrate them once on every full-page load.
+  if (!session.initialized) {
     await refreshSession().catch(() => null)
   }
   if (to.meta.public && isAuthenticated()) {

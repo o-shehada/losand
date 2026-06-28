@@ -5,6 +5,7 @@ export const session = reactive({
   user: window.boot?.user || "Guest",
   canProduce: false,
   canEnter: false,
+  initialized: false,
   loading: false,
   error: "",
 })
@@ -21,7 +22,11 @@ export async function refreshSession() {
     session.user = current.user
     session.canProduce = !!current.can_produce
     session.canEnter = !!current.can_enter
+    session.initialized = true
     return current
+  } catch (error) {
+    session.error = error.message
+    throw error
   } finally {
     session.loading = false
   }
@@ -44,4 +49,7 @@ export async function signIn(username, password) {
 export async function signOut() {
   await logout()
   session.user = "Guest"
+  session.canProduce = false
+  session.canEnter = false
+  session.initialized = true
 }
