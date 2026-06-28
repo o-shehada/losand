@@ -350,6 +350,19 @@ def _fefo_rows(item_code, warehouse, qty):
 	return rows
 
 
+def _stock_rows(item_code, warehouse, qty):
+	"""Return stock allocations for both batched and ordinary stock items."""
+	qty = frappe.utils.flt(qty)
+	if not frappe.db.get_value("Item", item_code, "has_batch_no"):
+		return [(None, qty)]
+	return _fefo_rows(item_code, warehouse, qty)
+
+
+def _batch_fields(batch_no):
+	"""Stock Entry row fields required only when consuming a specific batch."""
+	return {"use_serial_batch_fields": 1, "batch_no": batch_no} if batch_no else {}
+
+
 def _material_issue_rows(batch):
 	"""Combine consumed raw materials and same-item loss rows for one stock deduction."""
 	combined = {}
@@ -427,8 +440,10 @@ def submit_batch(payload, totals=None):
 		# 1) Material Transfer raw → WIP (FEFO from raw warehouse)
 		transfer = _make("Material Transfer", rm_wh, wip_wh)
 		for m in material_issue_rows:
-			for batch_no, q in _fefo_rows(m.item_code, rm_wh, m.qty):
-				transfer.append("items", {"item_code": m.item_code, "qty": q, "s_warehouse": rm_wh, "t_warehouse": wip_wh, "use_serial_batch_fields": 1, "batch_no": batch_no})
+			for batch_no, q in _stock_rows(m.item_code, rm_wh, m.qty):
+				row = {"item_code": m.item_code, "qty": q, "s_warehouse": rm_wh, "t_warehouse": wip_wh}
+				row.update(_batch_fields(batch_no))
+				transfer.append("items", row)
 		transfer.insert(ignore_permissions=True)
 		transfer.submit()
 		batch.db_set("transfer_entry", transfer.name)
@@ -437,8 +452,10 @@ def submit_batch(payload, totals=None):
 		# 2) Material Issue from WIP (FEFO) — value = C
 		issue = _make("Material Issue", wip_wh, None)
 		for m in material_issue_rows:
-			for batch_no, q in _fefo_rows(m.item_code, wip_wh, m.qty):
-				issue.append("items", {"item_code": m.item_code, "qty": q, "s_warehouse": wip_wh, "use_serial_batch_fields": 1, "batch_no": batch_no, "expense_account": clearing})
+			for batch_no, q in _stock_rows(m.item_code, wip_wh, m.qty):
+				row = {"item_code": m.item_code, "qty": q, "s_warehouse": wip_wh, "expense_account": clearing}
+				row.update(_batch_fields(batch_no))
+				issue.append("items", row)
 		issue.insert(ignore_permissions=True)
 		issue.submit()
 		issue.reload()
@@ -451,7 +468,10 @@ def submit_batch(payload, totals=None):
 		cost_per_g = c_actual / total_weight
 		receipt = _make("Material Receipt", None, fg_wh)
 		for o in batch.outputs:
-			receipt.append("items", {"item_code": o.item_code, "qty": o.qty, "t_warehouse": fg_wh, "basic_rate": flt(o.weight_per_unit) * cost_per_g, "use_serial_batch_fields": 1, "expense_account": clearing})
+			row = {"item_code": o.item_code, "qty": o.qty, "t_warehouse": fg_wh, "basic_rate": flt(o.weight_per_unit) * cost_per_g, "expense_account": clearing}
+			if frappe.db.get_value("Item", o.item_code, "has_batch_no"):
+				row["use_serial_batch_fields"] = 1
+			receipt.append("items", row)
 		receipt.insert(ignore_permissions=True)
 		receipt.submit()
 		receipt.reload()
@@ -461,7 +481,11 @@ def submit_batch(payload, totals=None):
 		batch.db_set("total_raw_cost", c_actual)
 		fg_batch = {}
 		for o in batch.outputs:
-			bn = frappe.get_all("Batch", filters={"item": o.item_code}, order_by="creation desc", limit=1, pluck="name")
+			bn = (
+				frappe.get_all("Batch", filters={"item": o.item_code}, order_by="creation desc", limit=1, pluck="name")
+				if frappe.db.get_value("Item", o.item_code, "has_batch_no")
+				else []
+			)
 			fg_batch[o.item_code] = bn[0] if bn else None
 		for o in batch.outputs:
 			unit_cost = flt(o.weight_per_unit) * cost_per_g

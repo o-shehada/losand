@@ -1,7 +1,7 @@
 import frappe
 import pytest
 
-from losand.api.manufacture import cfg, get_category_raw_materials, get_current_session, submit_batch
+from losand.api.manufacture import _stock_rows, cfg, get_category_raw_materials, get_current_session, submit_batch
 
 
 def test_get_current_session_returns_flags():
@@ -28,6 +28,11 @@ def test_get_category_raw_materials_shape():
 		first = rms[0]
 		for key in ("item_code", "name_ar", "unit", "rate", "available_qty"):
 			assert key in first
+
+
+def test_stock_rows_supports_non_batch_items(monkeypatch):
+	monkeypatch.setattr(frappe.db, "get_value", lambda *args, **kwargs: 0)
+	assert _stock_rows("Eggs", "Raw Materials", 4) == [(None, 4.0)]
 
 
 def test_submit_batch_requires_login():
