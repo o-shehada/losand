@@ -45,6 +45,28 @@ def can_enter():
 	return bool(_roles() & ENTER_ROLES)
 
 
+def _allowed_workbench_names(user=None):
+	"""Workbench names explicitly assigned to the current system user."""
+	user = user or frappe.session.user
+	if not user or user == "Guest":
+		return []
+	return frappe.get_all(
+		"Workbench Staff",
+		filters={
+			"parenttype": "Workbench",
+			"parentfield": "staff",
+			"user": user,
+		},
+		pluck="parent",
+		distinct=True,
+	)
+
+
+def _require_workbench_access(workbench):
+	if workbench not in set(_allowed_workbench_names()):
+		frappe.throw(_("You are not assigned to this workbench."), frappe.PermissionError)
+
+
 @frappe.whitelist()
 def get_current_session():
 	return {
@@ -100,7 +122,15 @@ def _last_receipt_rate(code, warehouse):
 def get_workbenches():
 	"""Enabled workbenches the user can produce at: category + 3 warehouses + shifts."""
 	result = []
-	for w in frappe.get_all("Workbench", filters={"disabled": 0}, order_by="workbench_name", pluck="name"):
+	allowed = _allowed_workbench_names()
+	if not allowed:
+		return result
+	for w in frappe.get_all(
+		"Workbench",
+		filters={"disabled": 0, "name": ["in", allowed]},
+		order_by="workbench_name",
+		pluck="name",
+	):
 		wb = frappe.get_cached_doc("Workbench", w)
 		shifts = sorted({r.shift for r in wb.staff if r.shift} | {r.shift for r in wb.workers if r.shift})
 		if not shifts:
@@ -291,6 +321,7 @@ def save_draft(payload):
 	wb_name = payload.get("workbench")
 	if not wb_name:
 		frappe.throw(_("Select a workbench first"))
+	_require_workbench_access(wb_name)
 	wb = frappe.get_cached_doc("Workbench", wb_name)
 
 	name = payload.get("batchName")
@@ -395,6 +426,7 @@ def submit_batch(payload, totals=None):
 	wb_name = payload.get("workbench")
 	if not wb_name:
 		frappe.throw(_("Select a workbench first"))
+	_require_workbench_access(wb_name)
 	wb = frappe.get_cached_doc("Workbench", wb_name)
 	c = cfg()
 	clearing = c.clearing or frappe.db.get_value("Account", {"company": c.company, "account_type": "Stock Adjustment", "is_group": 0}, "name")
