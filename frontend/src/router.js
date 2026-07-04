@@ -9,6 +9,8 @@ import PosShell from "@/features/pos/PosShell.vue"
 import PosRegister from "@/features/pos/PosRegister.vue"
 import PosOrders from "@/features/pos/PosOrders.vue"
 import PosInventory from "@/features/pos/PosInventory.vue"
+import PosStocktake from "@/features/pos/PosStocktake.vue"
+import PosReceiving from "@/features/pos/PosReceiving.vue"
 import PosReports from "@/features/pos/PosReports.vue"
 import PosSettings from "@/features/pos/PosSettings.vue"
 
@@ -37,6 +39,8 @@ const posRoutes = [
       { path: "", name: "pos-register", component: PosRegister },
       { path: "orders", name: "pos-orders", component: PosOrders },
       { path: "inventory", name: "pos-inventory", component: PosInventory },
+      { path: "stocktake", name: "pos-stocktake", component: PosStocktake },
+      { path: "receiving", name: "pos-receiving", component: PosReceiving },
       { path: "reports", name: "pos-reports", component: PosReports },
       { path: "settings", name: "pos-settings", component: PosSettings },
     ],

@@ -39,6 +39,20 @@ export const PRODUCTS = [
   { id: "P12", name: "قهوة عربية", category: "drinks", price: 5.0, img: "https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=400&q=70" },
 ]
 
+// ---- Item customization (add-ons + free notes) ----
+// ponytail: global catalog for the whole menu. Per-item / per-category add-ons
+// come with the ERPNext wiring (Item Group → linked modifiers); a flat list is
+// enough for the visual build.
+export const EXTRAS = [
+  { id: "cheese", name: "جبنة", price: 2 },
+  { id: "extra_sauce", name: "صوص إكسترا", price: 1 },
+  { id: "bacon", name: "بيكون", price: 3 },
+  { id: "pickle", name: "مخلل إضافي", price: 1 },
+  { id: "jalapeno", name: "جلابينو", price: 2 },
+]
+// Free notes — no price, just a kitchen instruction.
+export const NOTES = ["بدون كاتشب", "بدون مايونيز", "بدون بصل", "بدون بيض", "بدون خس", "خبز محمص"]
+
 // ---- Orders: kanban board ----
 export const ORDER_COLUMNS = [
   { key: "new", label: "جديدة", dot: "bg-pos-brand", badge: "pos-badge-new", accent: "pos-col-new" },
