@@ -114,6 +114,7 @@ fixtures = [
 			"Item-classification",
 			"Stock Entry-custom_production_batch",
 			"Stock Entry-custom_workbench",
+			"Sales Invoice-losand_pos_request_id",
 		]]],
 	},
 	{

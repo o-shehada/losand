@@ -15,7 +15,6 @@ const totals = computed(() => calc(draft))
 const producedProducts = computed(() => draft.finished_products.filter((f) => Number(f.qty) > 0))
 const usedMaterials = computed(() => draft.raw_materials.filter((m) => Number(m.qty) > 0))
 const lossMaterials = computed(() => (draft.losses || []).filter((m) => Number(m.qty) > 0))
-const confirmed = ref(false)
 const saving = ref(false)
 
 async function logout() {
@@ -24,7 +23,7 @@ async function logout() {
 }
 
 async function save() {
-  if (!confirmed.value || saving.value) return
+  if (saving.value) return
   saving.value = true
   try {
     // Re-check at the point of posting so a role change in another tab/Desk is
@@ -133,15 +132,6 @@ onUnmounted(() => clearInterval(timer))
         </div>
       </section>
 
-      <!-- Sign-off -->
-      <section class="mb-6">
-        <div class="bg-white rounded-2xl border border-border shadow-sm p-5">
-          <label class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-border cursor-pointer">
-            <input type="checkbox" v-model="confirmed" class="w-5 h-5 accent-primary rounded" />
-            <span class="text-sm font-medium">أقر بأن بيانات هذه الدفعة صحيحة ({{ session.user }}).</span>
-          </label>
-        </div>
-      </section>
     </main>
 
     <footer class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-border shadow-lg">
@@ -152,7 +142,7 @@ onUnmounted(() => clearInterval(timer))
         </div>
         <div class="flex items-center gap-3">
           <button @click="router.push('/food-logger/new')" class="flex items-center gap-2 px-5 py-3 bg-slate-100 text-muted rounded-xl text-sm font-semibold border border-border hover:bg-slate-200"><i class="fa-solid fa-arrow-right text-sm"></i> رجوع</button>
-          <button @click="save" :disabled="!confirmed || saving || session.loading || (session.initialized && !session.canProduce)" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <button @click="save" :disabled="saving || session.loading || (session.initialized && !session.canProduce)" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <i class="fa-solid" :class="saving ? 'fa-spinner fa-spin' : 'fa-circle-check'"></i>
             {{ saving ? "جارٍ الترحيل..." : "تأكيد وترحيل الدفعة" }}
           </button>

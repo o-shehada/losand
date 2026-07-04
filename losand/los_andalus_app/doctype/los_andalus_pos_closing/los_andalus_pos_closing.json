@@ -1,0 +1,36 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "POSCLOSE-.#####",
+ "creation": "2026-07-04 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["opening_entry", "pos_profile", "user", "period_start", "period_end", "column_break_1", "sales_total", "expected_cash", "counted_cash", "difference", "reconciliation"],
+ "fields": [
+  {"fieldname": "opening_entry", "fieldtype": "Link", "label": "Opening Entry", "options": "POS Opening Entry", "in_list_view": 1, "reqd": 1},
+  {"fieldname": "pos_profile", "fieldtype": "Link", "label": "POS Profile", "options": "POS Profile"},
+  {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "in_list_view": 1},
+  {"fieldname": "period_start", "fieldtype": "Datetime", "label": "Period Start"},
+  {"fieldname": "period_end", "fieldtype": "Datetime", "label": "Period End"},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"fieldname": "sales_total", "fieldtype": "Currency", "label": "Sales Total", "in_list_view": 1},
+  {"fieldname": "expected_cash", "fieldtype": "Currency", "label": "Expected Cash"},
+  {"fieldname": "counted_cash", "fieldtype": "Currency", "label": "Counted Cash"},
+  {"fieldname": "difference", "fieldtype": "Currency", "label": "Difference"},
+  {"fieldname": "reconciliation", "fieldtype": "Long Text", "label": "Reconciliation (per mode)"}
+ ],
+ "links": [],
+ "modified": "2026-07-04 00:00:00",
+ "module": "Los Andalus App",
+ "name": "Los Andalus POS Closing",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"create": 1, "delete": 0, "print": 1, "read": 1, "report": 1, "role": "Accounts Manager", "share": 1, "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

@@ -1,11 +1,14 @@
 import { createRouter, createWebHistory } from "vue-router"
 import { session, isAuthenticated, refreshSession } from "@/stores/session"
+import { ensurePos, hasShift } from "@/stores/pos"
 import LoginView from "@/features/auth/LoginView.vue"
 import ManufactureHome from "@/features/manufacture/ManufactureHome.vue"
 import FoodLoggerEntry from "@/features/food-logger/FoodLoggerEntry.vue"
 import FoodLoggerSummary from "@/features/food-logger/FoodLoggerSummary.vue"
 import FoodLoggerSuccess from "@/features/food-logger/FoodLoggerSuccess.vue"
 import PosShell from "@/features/pos/PosShell.vue"
+import PosOpening from "@/features/pos/PosOpening.vue"
+import PosClosing from "@/features/pos/PosClosing.vue"
 import PosRegister from "@/features/pos/PosRegister.vue"
 import PosOrders from "@/features/pos/PosOrders.vue"
 import PosInventory from "@/features/pos/PosInventory.vue"
@@ -32,6 +35,8 @@ const manufactureRoutes = [
 
 const posRoutes = [
   { path: "/login", name: "login", component: LoginView, meta: { public: true } },
+  { path: "/opening", name: "pos-opening", component: PosOpening },
+  { path: "/closing", name: "pos-closing", component: PosClosing },
   {
     path: "/",
     component: PosShell,
@@ -63,6 +68,17 @@ router.beforeEach(async (to) => {
   }
   if (!to.meta.public && !isAuthenticated()) {
     return "/login"
+  }
+  // POS shift gate: no open shift → force the opening screen (which is exempt,
+  // else it would redirect to itself forever).
+  if (isPos && !to.meta.public) {
+    await ensurePos()
+    if (to.name !== "pos-opening" && !hasShift()) {
+      return "/opening"
+    }
+    if (to.name === "pos-opening" && hasShift()) {
+      return "/"
+    }
   }
   return true
 })

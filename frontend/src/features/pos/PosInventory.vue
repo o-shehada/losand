@@ -1,26 +1,52 @@
 <script setup>
-import { ref, computed } from "vue"
-import { INVENTORY, stockStatus, itemCat, BRANCH, ar } from "./data"
+import { ref, computed, onMounted } from "vue"
+import { stockStatus, BRANCH, ar } from "./data"
+import { getInventory } from "@/lib/api"
 
 const search = ref("")
 const statusFilter = ref("all")
 const showFilter = ref(false)
 const showAdd = ref(false)
+const items = ref([])
+
+// Status derived from qty vs the item's safety-stock (warn) level: 0 → نفد,
+// at/below warn → منخفض, else متوفر.
+function toRow(it) {
+  const warn = it.warn || 0
+  const status = it.system_qty <= 0 ? "outstock" : warn > 0 && it.system_qty <= warn ? "lowstock" : "instock"
+  return {
+    sku: it.id,
+    name: it.name,
+    cat: it.category,
+    status,
+    qty: it.system_qty,
+    warn,
+    unit: it.uom,
+    unitShort: it.uom,
+    icon: "fa-box",
+  }
+}
+
+onMounted(async () => {
+  const inv = await getInventory().catch(() => ({ items: [] }))
+  items.value = (inv.items || []).map(toRow)
+})
 
 const rows = computed(() =>
-  INVENTORY.filter(
+  items.value.filter(
     (it) => (statusFilter.value === "all" || it.status === statusFilter.value) && it.name.includes(search.value.trim()),
   ),
 )
 
 const stats = computed(() => ({
-  total: INVENTORY.length,
-  instock: INVENTORY.filter((i) => i.status === "instock").length,
-  lowstock: INVENTORY.filter((i) => i.status === "lowstock").length,
-  outstock: INVENTORY.filter((i) => i.status === "outstock").length,
+  total: items.value.length,
+  instock: items.value.filter((i) => i.status === "instock").length,
+  lowstock: items.value.filter((i) => i.status === "lowstock").length,
+  outstock: items.value.filter((i) => i.status === "outstock").length,
 }))
 
-const pct = (it) => Math.min(100, Math.round((it.qty / it.max) * 100))
+// Bar fills toward 2× the warn level (warn = 50%); full if no warn set.
+const pct = (it) => (it.warn > 0 ? Math.min(100, Math.round((it.qty / (it.warn * 2)) * 100)) : it.qty > 0 ? 100 : 0)
 const filters = [
   { key: "all", label: "الكل", cls: "text-gray-700" },
   { key: "instock", label: "متوفر", cls: "text-pos-green" },
@@ -116,11 +142,11 @@ const filters = [
             <div class="w-9 h-9 rounded-xl bg-pos-brand-light flex items-center justify-center flex-shrink-0"><i class="fa-solid text-pos-brand text-sm" :class="it.icon"></i></div>
             <div><p class="text-sm font-bold text-gray-800 leading-tight">{{ it.name }}</p><p class="text-[10px] text-pos-muted font-semibold">SKU: {{ it.sku }}</p></div>
           </div>
-          <div class="col-span-2"><span class="pos-cat" :class="itemCat(it.cat).pill">{{ itemCat(it.cat).label }}</span></div>
+          <div class="col-span-2"><span class="pos-cat pos-cat-dry">{{ it.cat }}</span></div>
           <div class="col-span-2">
             <p class="text-sm" :class="stockStatus(it.status).qty">{{ ar(it.qty) }} {{ it.unitShort }}</p>
             <div class="w-20 bg-pos-border rounded-full h-1.5 mt-1"><div class="h-1.5 rounded-full" :class="stockStatus(it.status).bar" :style="{ width: pct(it) + '%' }"></div></div>
-            <p class="text-[10px] text-pos-muted font-semibold mt-0.5">من {{ ar(it.max) }} {{ it.unitShort }}</p>
+            <p v-if="it.warn" class="text-[10px] text-pos-muted font-semibold mt-0.5">حد التنبيه {{ ar(it.warn) }} {{ it.unitShort }}</p>
           </div>
           <div class="col-span-1"><span class="text-xs font-bold text-gray-600">{{ it.unit }}</span></div>
           <div class="col-span-2">

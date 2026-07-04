@@ -1,6 +1,8 @@
 <script setup>
-import { ref, reactive, computed } from "vue"
-import { CATEGORIES, PRODUCTS, BRANCH, money, ar } from "./data"
+import { ref, reactive, computed, onMounted } from "vue"
+import { CATEGORIES as STATIC_CATEGORIES, PRODUCTS as STATIC_PRODUCTS, BRANCH, money, ar } from "./data"
+import { getPosProducts, submitOrder, checkGiftCard, parkOrder, listParked, resumeParked, discardParked } from "@/lib/api"
+import { pos } from "@/stores/pos"
 import { lineTotal, unitPrice, isUniform, giftApplied as calcGiftApplied, giftRemaining } from "./cartMath"
 import PosCustomizeSheet from "./PosCustomizeSheet.vue"
 
@@ -10,8 +12,31 @@ const cart = ref([])
 const discount = ref(0)
 const tableLabel = ref("الطاولة الخامسة")
 
+// Live catalog from ERPNext (POS Profile). Falls back to the static mock so the
+// portal still renders if no POS Profile / items exist yet (dev + first run).
+const categories = ref(STATIC_CATEGORIES)
+const products = ref(STATIC_PRODUCTS)
+const loadError = ref("")
+
+onMounted(async () => {
+  payment.value = pos.config?.payments?.find((p) => p.default)?.mode_of_payment || payMethods.value[0]?.key || "Cash"
+  loadHeld()
+  try {
+    const res = await getPosProducts()
+    if (res?.products?.length) {
+      products.value = res.products
+      categories.value = [
+        { key: "all", label: "الكل", icon: "fa-utensils" },
+        ...res.categories.map((c) => ({ ...c, icon: "fa-utensils" })),
+      ]
+    }
+  } catch (e) {
+    loadError.value = e.message // keep the static fallback, don't crash the register
+  }
+})
+
 const visibleProducts = computed(() =>
-  PRODUCTS.filter((p) => (activeCat.value === "all" || p.category === activeCat.value) && p.name.includes(search.value.trim())),
+  products.value.filter((p) => (activeCat.value === "all" || p.category === activeCat.value) && p.name.includes(search.value.trim())),
 )
 
 // A line holds `pieces` (one per unit ordered). Each piece carries its own
@@ -36,34 +61,54 @@ function remove(line) {
 function clearCart() {
   cart.value = []
   discount.value = 0
+  gift.card = null
+  gift.open = false
+  gift.id = ""
+  gift.error = ""
 }
 
 const lineQty = (line) => line.pieces.length
 // lineTotal / unitPrice / isUniform live in cartMath.js (pricing has its own test).
 
-const payMethods = [
-  { key: "cash", label: "نقدي", icon: "fa-money-bill-wave" },
-  { key: "card", label: "بطاقة", icon: "fa-credit-card" },
-  { key: "presto", label: "بريستو", icon: "fa-mobile-screen-button" },
-]
-const payment = ref("cash")
+// Payment methods come from the POS Profile (Mode of Payment names). Known modes
+// get an Arabic label + icon; anything else shows its raw name.
+const PAY_META = {
+  Cash: { label: "نقدي", icon: "fa-money-bill-wave" },
+  "Credit Card": { label: "بطاقة", icon: "fa-credit-card" },
+  "Debit Card": { label: "بطاقة", icon: "fa-credit-card" },
+}
+const payMethods = computed(() =>
+  (pos.config?.payments?.length ? pos.config.payments : [{ mode_of_payment: "Cash", default: true }]).map((p) => {
+    const meta = PAY_META[p.mode_of_payment] || { label: p.mode_of_payment, icon: "fa-wallet" }
+    return { key: p.mode_of_payment, label: meta.label, icon: meta.icon }
+  }),
+)
+const payment = ref("Cash")
 
 const count = computed(() => cart.value.reduce((s, l) => s + l.pieces.length, 0))
 const subtotal = computed(() => cart.value.reduce((s, l) => s + lineTotal(l), 0))
 const total = computed(() => Math.max(0, subtotal.value - Number(discount.value || 0)))
 
-// Gift card / coupon — a credit applied before the remaining payment method.
-// ponytail: fixed mock value; real balance lookup comes with the ERPNext gift
-// card doctype. Covers the whole total → remaining 0 (invoice settles at 0);
-// covers part → remaining paid by the selected method.
-const MOCK_GIFT_VALUE = 10
-const gift = reactive({ open: false, id: "", card: null })
-function applyGift() {
-  const id = gift.id.trim()
-  if (!id) return
-  gift.card = { id, value: MOCK_GIFT_VALUE }
-  gift.open = false
-  gift.id = ""
+// Gift card / coupon — a credit tendered before the remaining payment method.
+// Balance comes from the Los Andalus Gift Card doctype; the server computes the
+// split (min of balance, total). Covers whole total → remaining 0; covers part →
+// remaining paid by the selected method.
+const gift = reactive({ open: false, id: "", card: null, checking: false, error: "" })
+async function applyGift() {
+  const code = gift.id.trim()
+  if (!code) return
+  gift.checking = true
+  gift.error = ""
+  try {
+    const res = await checkGiftCard(code)
+    gift.card = { id: res.card_no, value: res.balance }
+    gift.open = false
+    gift.id = ""
+  } catch (e) {
+    gift.error = e.message
+  } finally {
+    gift.checking = false
+  }
 }
 function removeGift() {
   gift.card = null
@@ -71,25 +116,74 @@ function removeGift() {
 const giftApplied = computed(() => (gift.card ? calcGiftApplied(total.value, gift.card.value) : 0))
 const remaining = computed(() => (gift.card ? giftRemaining(total.value, gift.card.value) : total.value))
 
+// Checkout submits a real Sales Invoice (Phase 1). Paid add-ons and gift cards
+// change what the customer is charged but aren't wired to the invoice yet, so
+// block checkout while either is present — shown total must equal submitted total.
+const hasPaidExtras = computed(() => cart.value.some((l) => l.pieces.some((p) => p.extras.length)))
+// Every add-on in the cart must carry a real item_code (came from the live
+// catalog). A static-fallback extra has no item_code → never let it reach submit.
+const extrasResolved = computed(() => cart.value.every((l) => l.pieces.every((p) => p.extras.every((e) => e.item_code))))
+const blockReason = computed(() => {
+  if (hasPaidExtras.value && !extrasResolved.value) return "قائمة الإضافات غير محمّلة — أعد المحاولة"
+  return ""
+})
+const canCheckout = computed(() => !!cart.value.length && !blockReason.value)
+
+const checkingOut = ref(false)
+const checkoutError = ref("")
+const receipt = ref(null)
+
+async function checkout() {
+  if (!canCheckout.value || checkingOut.value) return
+  checkingOut.value = true
+  checkoutError.value = ""
+  try {
+    // Base line + its add-ons as separate priced lines. ponytail: per-piece grouping
+    // is flattened (cheese on piece #1 becomes one cheese line) and free notes are
+    // dropped — both money-correct; kitchen-ticket detail is a later phase.
+    const items = []
+    for (const l of cart.value) {
+      items.push({ item_code: l.id, qty: lineQty(l) })
+      const extraQty = {}
+      for (const pc of l.pieces) for (const e of pc.extras) extraQty[e.item_code] = (extraQty[e.item_code] || 0) + 1
+      for (const [code, qty] of Object.entries(extraQty)) items.push({ item_code: code, qty })
+    }
+    const res = await submitOrder({
+      cart: items,
+      payments: [{ mode_of_payment: payment.value }],
+      discount: Number(discount.value || 0),
+      gift_card: gift.card?.id || null,
+      table: tableLabel.value,
+      request_id: crypto.randomUUID(),
+    })
+    receipt.value = res
+    clearCart()
+  } catch (e) {
+    checkoutError.value = e.message
+  } finally {
+    checkingOut.value = false
+  }
+}
+
 // Paused / parked orders. Snapshot the whole order, clear the register for a
-// new one, resume later. ponytail: component-local, so it clears on nav away —
-// same as the live cart today; move to a store + backend with the ERPNext wiring.
+// new one, resume later. Persisted server-side (Los Andalus Parked Order) so
+// holds survive navigation/reload. The payload only restores the UI — money is
+// re-priced server-side at checkout.
 const held = ref([])
 const showHeld = ref(false)
-let heldSeq = 0
-const heldTotal = (h) => Math.max(0, h.cart.reduce((s, l) => s + lineTotal(l), 0) - Number(h.discount || 0))
+async function loadHeld() {
+  held.value = (await listParked().catch(() => [])) || []
+}
 function resetOrder() {
   cart.value = []
   discount.value = 0
-  payment.value = "cash"
+  payment.value = pos.config?.payments?.find((p) => p.default)?.mode_of_payment || "Cash"
   gift.card = null
   gift.open = false
   gift.id = ""
 }
 function snapshot() {
   return {
-    key: ++heldSeq,
-    at: new Date(),
     table: tableLabel.value,
     cart: JSON.parse(JSON.stringify(cart.value)), // plain data (no fns) → safe clone
     discount: discount.value,
@@ -97,23 +191,32 @@ function snapshot() {
     gift: gift.card ? { ...gift.card } : null,
   }
 }
-function pauseOrder() {
+async function parkCurrent() {
+  await parkOrder({ payload: snapshot(), table: tableLabel.value, total: total.value })
+}
+async function pauseOrder() {
   if (!cart.value.length) return
-  held.value.push(snapshot())
+  await parkCurrent()
   resetOrder()
+  await loadHeld()
 }
-function resumeOrder(h) {
-  if (cart.value.length) held.value.push(snapshot()) // park the current order first
-  cart.value = h.cart
-  discount.value = h.discount
-  payment.value = h.payment
-  tableLabel.value = h.table
-  gift.card = h.gift
-  held.value = held.value.filter((x) => x.key !== h.key)
+async function resumeOrder(h) {
+  if (cart.value.length) await parkCurrent() // park the current order first
+  const res = await resumeParked(h.name)
+  const s = res?.payload
+  if (s) {
+    cart.value = s.cart || []
+    discount.value = s.discount || 0
+    payment.value = s.payment || payment.value
+    tableLabel.value = s.table || tableLabel.value
+    gift.card = s.gift || null
+  }
   showHeld.value = false
+  await loadHeld()
 }
-function dropHeld(h) {
-  held.value = held.value.filter((x) => x.key !== h.key)
+async function dropHeld(h) {
+  await discardParked(h.name)
+  await loadHeld()
 }
 
 // Per-line expand toggle for the per-piece editor list.
@@ -198,10 +301,10 @@ function sheetDone(res) {
           <p class="text-xs font-extrabold text-gray-700 px-2 py-1.5">الطلبات المعلّقة</p>
           <div v-if="!held.length" class="text-center text-pos-muted text-xs font-semibold py-6">لا توجد طلبات معلّقة</div>
           <div v-else class="flex flex-col gap-1.5 max-h-72 overflow-y-auto">
-            <div v-for="h in held" :key="h.key" class="flex items-center gap-2 bg-pos-canvas border border-pos-border rounded-xl px-2.5 py-2">
+            <div v-for="h in held" :key="h.name" class="flex items-center gap-2 bg-pos-canvas border border-pos-border rounded-xl px-2.5 py-2">
               <button @click="resumeOrder(h)" class="flex-1 min-w-0 text-right">
-                <p class="text-xs font-bold text-gray-800 leading-tight flex items-center gap-1.5"><i class="fa-solid fa-chair text-pos-brand text-[10px]"></i> {{ h.table }}</p>
-                <p class="text-[10px] text-pos-muted font-semibold">{{ h.cart.length }} أصناف · {{ money(heldTotal(h)) }}</p>
+                <p class="text-xs font-bold text-gray-800 leading-tight flex items-center gap-1.5"><i class="fa-solid fa-chair text-pos-brand text-[10px]"></i> {{ h.table_label }}</p>
+                <p class="text-[10px] text-pos-muted font-semibold">{{ money(h.total) }}</p>
               </button>
               <button @click="resumeOrder(h)" class="text-[11px] font-bold text-pos-brand-dark bg-pos-brand-light border border-pos-brand/25 rounded-lg px-2.5 py-1.5 hover:bg-pos-brand hover:text-white transition-colors">استئناف</button>
               <button @click="dropHeld(h)" class="text-pos-muted hover:text-pos-danger transition-colors px-1"><i class="fa-solid fa-trash text-xs"></i></button>
@@ -227,7 +330,7 @@ function sheetDone(res) {
       <!-- Category tabs -->
       <div class="px-3 md:px-4 py-3 flex items-center gap-2 overflow-x-auto flex-shrink-0">
         <button
-          v-for="c in CATEGORIES"
+          v-for="c in categories"
           :key="c.key"
           @click="activeCat = c.key"
           class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-colors min-h-[44px]"
@@ -387,17 +490,20 @@ function sheetDone(res) {
             >
               <i class="fa-solid fa-gift text-xs"></i> بطاقة هدية / قسيمة
             </button>
-            <div v-else class="flex items-center gap-2">
-              <input
-                v-model="gift.id"
-                @keyup.enter="applyGift"
-                type="text"
-                placeholder="رقم البطاقة"
-                dir="ltr"
-                class="flex-1 bg-pos-surface border border-pos-border rounded-xl px-3 py-2 text-xs text-gray-700 focus:outline-none focus:border-pos-brand min-h-[40px]"
-              />
-              <button @click="applyGift" class="bg-pos-brand text-white text-xs font-bold px-3 rounded-xl min-h-[40px] hover:bg-pos-brand-dark transition-colors">تطبيق</button>
-              <button @click="gift.open = false" class="text-pos-muted px-1 hover:text-pos-danger transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            <div v-else>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="gift.id"
+                  @keyup.enter="applyGift"
+                  type="text"
+                  placeholder="رقم البطاقة"
+                  dir="ltr"
+                  class="flex-1 bg-pos-surface border border-pos-border rounded-xl px-3 py-2 text-xs text-gray-700 focus:outline-none focus:border-pos-brand min-h-[40px]"
+                />
+                <button @click="applyGift" :disabled="gift.checking" class="bg-pos-brand text-white text-xs font-bold px-3 rounded-xl min-h-[40px] hover:bg-pos-brand-dark transition-colors disabled:opacity-40">{{ gift.checking ? "…" : "تطبيق" }}</button>
+                <button @click="gift.open = false" class="text-pos-muted px-1 hover:text-pos-danger transition-colors"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <p v-if="gift.error" class="text-[10px] text-pos-danger font-bold mt-1">{{ gift.error }}</p>
             </div>
           </template>
         </div>
@@ -445,6 +551,12 @@ function sheetDone(res) {
             <span class="font-extrabold" :class="remaining === 0 ? 'text-pos-green' : 'text-pos-brand-dark'">{{ money(remaining) }}</span>
           </div>
         </template>
+        <p v-if="blockReason && cart.length" class="text-[11px] text-pos-amber font-bold mt-2 flex items-center gap-1.5">
+          <i class="fa-solid fa-circle-info text-[10px]"></i> {{ blockReason }}
+        </p>
+        <p v-if="checkoutError" class="text-[11px] text-pos-danger font-bold mt-2 flex items-center gap-1.5">
+          <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> {{ checkoutError }}
+        </p>
         <button
           @click="pauseOrder"
           :disabled="!cart.length"
@@ -461,11 +573,12 @@ function sheetDone(res) {
             <i class="fa-solid fa-trash text-xs"></i>
           </button>
           <button
-            :disabled="!cart.length"
+            @click="checkout"
+            :disabled="!canCheckout || checkingOut"
             class="col-span-2 pos-btn bg-pos-brand text-white text-sm font-extrabold py-2.5 rounded-xl min-h-[44px] flex items-center justify-center gap-2 hover:bg-pos-brand-dark transition-colors shadow-md shadow-pos-brand/25 disabled:opacity-40"
           >
-            <i class="fa-solid" :class="gift.card && remaining === 0 ? 'fa-circle-check' : 'fa-credit-card'"></i>
-            {{ gift.card && remaining === 0 ? "إتمام — مدفوع بالكامل" : "إتمام الدفع" }}
+            <i class="fa-solid" :class="checkingOut ? 'fa-spinner fa-spin' : 'fa-credit-card'"></i>
+            {{ checkingOut ? "جارٍ الإتمام…" : "إتمام الدفع" }}
           </button>
         </div>
       </div>
@@ -481,4 +594,22 @@ function sheetDone(res) {
     @done="sheetDone"
     @close="sheet.open = false"
   />
+
+  <!-- Order completed -->
+  <div v-if="receipt" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" style="backdrop-filter: blur(4px)" @click.self="receipt = null">
+    <div class="pos-modal bg-pos-surface rounded-xl2 shadow-2xl border border-pos-border p-8 flex flex-col items-center gap-4 max-w-sm w-full text-center">
+      <div class="w-16 h-16 bg-pos-green-light rounded-full flex items-center justify-center"><i class="fa-solid fa-circle-check text-pos-green text-3xl"></i></div>
+      <div>
+        <h3 class="font-extrabold text-gray-800 text-lg">تم إتمام الطلب!</h3>
+        <p class="text-sm text-pos-muted font-semibold mt-1">فاتورة #{{ receipt.name }}</p>
+      </div>
+      <div class="w-full bg-pos-canvas border border-pos-border rounded-xl px-4 py-3 flex flex-col gap-1.5">
+        <div class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold">الإجمالي</span><span class="font-extrabold text-gray-800">{{ money(receipt.grand_total) }}</span></div>
+        <div v-if="receipt.gift_applied" class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold flex items-center gap-1.5"><i class="fa-solid fa-gift text-xs text-pos-brand"></i> بطاقة هدية</span><span class="font-bold text-pos-brand-dark">−{{ money(receipt.gift_applied) }}</span></div>
+        <div class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold">المدفوع</span><span class="font-bold text-gray-700">{{ money(receipt.paid_amount) }}</span></div>
+        <div v-if="receipt.change_amount" class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold">الباقي للعميل</span><span class="font-bold text-pos-brand-dark">{{ money(receipt.change_amount) }}</span></div>
+      </div>
+      <button @click="receipt = null" class="bg-pos-brand text-white font-extrabold text-sm px-8 py-2.5 rounded-xl min-h-[44px] hover:bg-pos-brand-dark transition-colors w-full">طلب جديد</button>
+    </div>
+  </div>
 </template>

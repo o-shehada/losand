@@ -47,6 +47,13 @@ async function logout() {
           <span class="text-[8px] text-pos-muted font-semibold">متزامن</span>
         </div>
         <button
+          @click="router.push('/closing')"
+          title="إغلاق الوردية"
+          class="w-9 h-9 rounded-full border-2 border-pos-amber bg-pos-amber-light flex items-center justify-center text-pos-amber hover:bg-pos-amber hover:text-white transition-colors"
+        >
+          <i class="fa-solid fa-lock text-sm"></i>
+        </button>
+        <button
           @click="logout"
           :title="`${session.user} — تسجيل الخروج`"
           class="w-9 h-9 rounded-full border-2 border-pos-brand bg-pos-brand-light flex items-center justify-center text-pos-brand-dark hover:bg-pos-brand hover:text-white transition-colors"
