@@ -3,7 +3,18 @@ import { ref, reactive, computed, onMounted, watch } from "vue"
 import { BRANCH, ar } from "./data"
 import { getPosProducts, previewOrder, submitOrder, checkGiftCard, parkOrder, listParked, resumeParked, discardParked } from "@/lib/api"
 import { pos } from "@/stores/pos"
-import { lineTotal, unitPrice, isUniform, giftApplied as calcGiftApplied, giftRemaining } from "./cartMath"
+import { consumePendingEdit } from "@/stores/pendingEdit"
+import {
+  lineTotal,
+  unitPrice,
+  isUniform,
+  giftApplied as calcGiftApplied,
+  giftRemaining,
+  tenderedTotal,
+  tenderDiff,
+  tenderFill,
+  canGiveChange,
+} from "./cartMath"
 import PosCustomizeSheet from "./PosCustomizeSheet.vue"
 
 const activeCat = ref("all")
@@ -12,14 +23,39 @@ const cart = ref([])
 const discount = ref(0)
 const tableLabel = ref("الطاولة الخامسة")
 
+// Arabic weekday/month names, Western digits (matches the rest of the UI — see ar() in data.js).
+const today = new Intl.DateTimeFormat("ar", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  numberingSystem: "latn",
+}).format(new Date())
+
 // The register only sells the live ERPNext catalog for the active POS Profile.
 const categories = ref([{ key: "all", label: "الكل", icon: "fa-utensils" }])
 const products = ref([])
 const loadError = ref("")
 
 onMounted(async () => {
-  payment.value = pos.config?.payments?.find((p) => p.default)?.mode_of_payment || payMethods.value[0]?.key || "Cash"
   loadHeld()
+  // Coming back from "edit" on a cancelled invoice (see PosHistory.vue): reload
+  // its lines as flat cart rows. Per-piece extras/notes aren't recoverable
+  // (flattened at the original checkout) — the cashier re-applies those.
+  const edit = consumePendingEdit()
+  if (edit) {
+    cart.value = edit.cart.map((line) => ({
+      id: line.item_code,
+      name: line.item_name || line.item_code,
+      price: Number(line.rate) || 0,
+      original_rate: Number(line.rate) || 0,
+      available_qty: undefined,
+      uom: "",
+      is_stock_item: false,
+      pieces: Array.from({ length: Math.max(1, Math.round(line.qty)) }, () => emptyPiece()),
+    }))
+    if (edit.table) tableLabel.value = edit.table
+  }
   try {
     const res = await getPosProducts()
     if (res && Array.isArray(res.products)) {
@@ -123,16 +159,19 @@ const PAY_META = {
   "Credit Card": { label: "بطاقة", icon: "fa-credit-card" },
   "Debit Card": { label: "بطاقة", icon: "fa-credit-card" },
 }
+const TYPE_ICON = { Cash: "fa-money-bill-wave", Bank: "fa-credit-card", Phone: "fa-mobile-screen" }
 const payMethods = computed(() =>
-  (pos.config?.payments?.length ? pos.config.payments : [{ mode_of_payment: "Cash", default: true }]).map((p) => {
-    const meta = PAY_META[p.mode_of_payment] || { label: p.mode_of_payment, icon: "fa-wallet" }
-    return { key: p.mode_of_payment, label: meta.label, icon: meta.icon }
-  }),
-)
-const payment = ref("Cash")
-const paymentAmount = ref(null)
-const showPaymentAmount = computed(
-  () => !!pos.config?.disable_grand_total_to_default_mop || !!pos.config?.allow_partial_payment,
+  (pos.config?.payments?.length ? pos.config.payments : [{ mode_of_payment: "Cash", type: "Cash", default: true }]).map(
+    (p) => {
+      const meta = PAY_META[p.mode_of_payment] || {
+        label: p.mode_of_payment,
+        icon: TYPE_ICON[p.type] || "fa-wallet",
+      }
+      // `type` is the Mode of Payment type from ERPNext — only a Cash-type row can
+      // give change back (see payBlockReason).
+      return { key: p.mode_of_payment, label: meta.label, icon: meta.icon, type: p.type }
+    },
+  ),
 )
 
 const count = computed(() => cart.value.reduce((s, l) => s + l.pieces.length, 0))
@@ -156,6 +195,10 @@ function cartItems() {
     ) {
       item.rate = Number(line.price || 0)
     }
+    // Kitchen-ticket instructions only — line-level (per-piece precision is
+    // dropped, same simplification as the paid add-ons below).
+    const notes = [...new Set(line.pieces.flatMap((p) => p.notes))]
+    if (notes.length) item.note = notes.join("، ")
     items.push(item)
     const extraQty = {}
     for (const piece of line.pieces) {
@@ -220,9 +263,31 @@ function removeGift() {
 }
 const giftApplied = computed(() => (gift.card ? calcGiftApplied(total.value, gift.card.value) : 0))
 const remaining = computed(() => (gift.card ? giftRemaining(total.value, gift.card.value) : total.value))
-watch(remaining, (value) => {
-  if (!pos.config?.disable_grand_total_to_default_mop) paymentAmount.value = value
-}, { immediate: true })
+
+// Payment: one row per Mode of Payment on the profile, same as the ERPNext /
+// POS Awesome payment screen. The default mode is pre-tendered with the whole
+// balance, so the common one-method sale is a single confirm tap; typing into
+// two rows splits the total (e.g. 200 cash + 100 card). Amounts are re-validated
+// against the real total server-side regardless.
+const defaultPayMode = () => pos.config?.payments?.find((p) => p.default)?.mode_of_payment || payMethods.value[0]?.key || "Cash"
+const splits = ref([])
+function resetSplits() {
+  const def = defaultPayMode()
+  const prefill = pos.config?.disable_grand_total_to_default_mop ? 0 : remaining.value
+  splits.value = payMethods.value.map((m) => ({
+    mode_of_payment: m.key,
+    amount: m.key === def ? prefill : 0,
+  }))
+}
+const modeType = (key) => payMethods.value.find((m) => m.key === key)?.type
+const splitsTotal = computed(() => tenderedTotal(splits.value))
+const splitsDiff = computed(() => tenderDiff(remaining.value, splits.value))
+const cashTendered = computed(() => canGiveChange(splits.value, modeType))
+// Tap a method → it tenders whatever is still unpaid, the way the ERPNext
+// payment screen does.
+function tender(row) {
+  row.amount = tenderFill(remaining.value, splits.value, row)
+}
 
 // Paid add-ons are submitted as real Item rows alongside the base product.
 const hasPaidExtras = computed(() => cart.value.some((l) => l.pieces.some((p) => p.extras.length)))
@@ -237,53 +302,91 @@ const stockIssue = computed(() => {
   }
   return null
 })
+// Blocks the register button — the order itself can't be paid for yet.
 const blockReason = computed(() => {
   if (stockIssue.value) {
     if (stockIssue.value.available <= 0) return `الصنف "${stockIssue.value.name}" غير متوفر حالياً`
     return `الكمية المتاحة من "${stockIssue.value.name}" هي ${formatQty(stockIssue.value.available)} ${stockIssue.value.uom || ""}`
   }
   if (quote.loading) return "جارٍ حساب الأسعار والضرائب…"
-  if (showPaymentAmount.value && remaining.value > 0) {
-    const amount = Number(paymentAmount.value || 0)
-    if (amount <= 0) return "أدخل المبلغ المدفوع"
-    if (!pos.config?.allow_partial_payment && amount < remaining.value) {
-      return "الدفع الجزئي غير مسموح في ملف نقطة البيع"
-    }
-  }
   if (hasPaidExtras.value && !extrasResolved.value) return "قائمة الإضافات غير محمّلة — أعد المحاولة"
   return ""
 })
+// Blocks only the confirm button inside the payment modal — the tendered
+// amounts don't add up yet.
+const payBlockReason = computed(() => {
+  if (remaining.value <= 0) return ""
+  if (splitsTotal.value <= 0) return "أدخل المبلغ المدفوع"
+  if (splitsDiff.value > 0.004 && !pos.config?.allow_partial_payment) {
+    return `المبلغ ناقص ${formatMoney(splitsDiff.value)} — الدفع الجزئي غير مسموح في ملف نقطة البيع`
+  }
+  // ERPNext only turns an overpayment into change_amount when a Cash-type mode is
+  // tendered; overpaying on a card would post a negative outstanding (customer
+  // credit) instead of change. Block it rather than write bad books.
+  if (splitsDiff.value < -0.004 && !cashTendered.value) {
+    return `الزيادة ${formatMoney(-splitsDiff.value)} لا يمكن إرجاعها على طريقة دفع غير نقدية — أدخل المبلغ بالضبط`
+  }
+  return ""
+})
 const canCheckout = computed(() => !!cart.value.length && !blockReason.value)
+const canPay = computed(() => canCheckout.value && !payBlockReason.value)
+
+// Checkout is a two-step flow: the register button opens the payment modal,
+// the modal's confirm actually submits.
+const payOpen = ref(false)
+function openPayment() {
+  if (!canCheckout.value) return
+  checkoutError.value = ""
+  resetSplits()
+  payOpen.value = true
+}
 
 const checkingOut = ref(false)
 const checkoutError = ref("")
 const receipt = ref(null)
 
+// Auto-dismiss the success modal so the cashier lands back on an empty, ready
+// register without an extra click — still closable early (× / click-outside).
+const NEW_ORDER_DELAY_MS = 1800
+let newOrderTimer
+
 async function checkout() {
-  if (!canCheckout.value || checkingOut.value) return
-  const printWindow = pos.config?.print_receipt_on_order_complete ? window.open("about:blank", "_blank") : null
+  if (!canPay.value || checkingOut.value) return
+  // Both print windows must open synchronously, inside this click handler and
+  // before any `await` — opening the second one after an async gap gets it
+  // blocked as a pop-up by the browser.
+  const receiptWindow = window.open("about:blank", "_blank")
+  const kitchenWindow = window.open("about:blank", "_blank")
   checkingOut.value = true
   checkoutError.value = ""
   try {
-    // Base line + its add-ons as separate priced lines. ponytail: per-piece grouping
-    // is flattened (cheese on piece #1 becomes one cheese line) and free notes are
-    // dropped — both money-correct; kitchen-ticket detail is a later phase.
+    // Base line + its add-ons as separate priced lines. ponytail: per-piece
+    // grouping is flattened (cheese on piece #1 becomes one cheese line) —
+    // money-correct; kitchen notes are line-level too, see cartItems().
     const items = cartItems()
-    const selectedPayment = { mode_of_payment: payment.value }
-    if (showPaymentAmount.value) selectedPayment.amount = Number(paymentAmount.value || 0)
+    const payments = splits.value
+      .filter((s) => Math.abs(Number(s.amount || 0)) > 0.004)
+      .map((s) => ({ mode_of_payment: s.mode_of_payment, amount: Number(s.amount) }))
     const res = await submitOrder({
       cart: items,
-      payments: [selectedPayment],
+      payments,
       discount: Number(discount.value || 0),
       gift_card: gift.card?.id || null,
       table: tableLabel.value,
       request_id: crypto.randomUUID(),
     })
     receipt.value = res
-    if (printWindow) printWindow.location.href = receiptUrl(res.name)
+    receiptWindow.location.href = receiptUrl(res.name)
+    kitchenWindow.location.href = kitchenTicketUrl(res.name)
+    payOpen.value = false
     clearCart()
+    clearTimeout(newOrderTimer)
+    newOrderTimer = setTimeout(() => {
+      if (receipt.value?.name === res.name) receipt.value = null
+    }, NEW_ORDER_DELAY_MS)
   } catch (e) {
-    printWindow?.close()
+    receiptWindow.close()
+    kitchenWindow.close()
     const stockMatch = e.message.match(/Not enough batch stock of (.+?) in .+? \(short ([\d.,]+)\)\.?/i)
     checkoutError.value = stockMatch
       ? `الكمية المتاحة من "${stockMatch[1]}" غير كافية لإتمام الطلب. النقص: ${stockMatch[2]}.`
@@ -297,15 +400,31 @@ function receiptUrl(name) {
   const params = new URLSearchParams({
     doctype: "Sales Invoice",
     name,
-    format: pos.config?.print_format || "POS Invoice",
+    format: pos.config?.print_format,
     trigger_print: "1",
   })
   if (pos.config?.letter_head) params.set("letterhead", pos.config.letter_head)
   return `/printview?${params.toString()}`
 }
 
+// No-price prep ticket for the kitchen — see losand/setup/kitchen_ticket.html.
+function kitchenTicketUrl(name) {
+  const params = new URLSearchParams({
+    doctype: "Sales Invoice",
+    name,
+    format: "Los Andalus Kitchen Ticket",
+    trigger_print: "1",
+  })
+  return `/printview?${params.toString()}`
+}
+
 function printReceipt(name) {
   window.open(receiptUrl(name), "_blank")
+}
+
+function dismissReceipt() {
+  clearTimeout(newOrderTimer)
+  receipt.value = null
 }
 
 // Paused / parked orders. Snapshot the whole order, clear the register for a
@@ -320,7 +439,6 @@ async function loadHeld() {
 function resetOrder() {
   cart.value = []
   discount.value = 0
-  payment.value = pos.config?.payments?.find((p) => p.default)?.mode_of_payment || "Cash"
   gift.card = null
   gift.open = false
   gift.id = ""
@@ -330,7 +448,6 @@ function snapshot() {
     table: tableLabel.value,
     cart: JSON.parse(JSON.stringify(cart.value)), // plain data (no fns) → safe clone
     discount: discount.value,
-    payment: payment.value,
     gift: gift.card ? { ...gift.card } : null,
   }
 }
@@ -350,7 +467,6 @@ async function resumeOrder(h) {
   if (s) {
     cart.value = s.cart || []
     discount.value = pos.config?.allow_discount_change ? s.discount || 0 : 0
-    payment.value = s.payment || payment.value
     tableLabel.value = s.table || tableLabel.value
     gift.card = s.gift || null
   }
@@ -415,7 +531,7 @@ function sheetDone(res) {
           <span class="text-xs text-pos-muted font-semibold">{{ BRANCH }}</span>
           <span class="text-xs text-pos-muted">·</span>
           <i class="fa-regular fa-calendar text-pos-muted text-xs"></i>
-          <span class="text-xs text-pos-muted">الأربعاء، 22 يناير 2025</span>
+          <span class="text-xs text-pos-muted">{{ today }}</span>
         </div>
       </div>
     </div>
@@ -495,8 +611,9 @@ function sheetDone(res) {
             :key="p.id"
             class="pos-product-card bg-pos-surface rounded-xl2 border border-pos-border overflow-hidden flex flex-col"
           >
-            <div v-if="!pos.config?.hide_images" class="h-28 bg-pos-brand-light overflow-hidden">
-              <img :src="p.img" :alt="p.name" class="w-full h-full object-cover" loading="lazy" />
+            <div v-if="!pos.config?.hide_images" class="h-28 bg-pos-brand-light overflow-hidden flex items-center justify-center">
+              <img v-if="p.img" :src="p.img" :alt="p.name" class="w-full h-full object-cover" loading="lazy" />
+              <i v-else class="fa-solid fa-utensils text-pos-brand/40 text-2xl"></i>
             </div>
             <div class="p-3 flex flex-col gap-2 flex-1">
               <p class="font-bold text-gray-800 text-sm leading-tight">{{ p.name }}</p>
@@ -684,33 +801,6 @@ function sheetDone(res) {
           </template>
         </div>
 
-        <!-- Payment method (pays the remaining balance) -->
-        <div class="grid grid-cols-3 gap-2 mb-3" :class="gift.card && remaining === 0 ? 'opacity-40 pointer-events-none' : ''">
-          <button
-            v-for="m in payMethods"
-            :key="m.key"
-            @click="payment = m.key"
-            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold min-h-[40px] border transition-colors"
-            :class="payment === m.key ? 'bg-pos-brand border-pos-brand text-white shadow-sm shadow-pos-brand/25' : 'bg-pos-brand-light/50 border-pos-border text-gray-600 hover:border-pos-brand hover:text-pos-brand'"
-          >
-            <i class="fa-solid text-xs" :class="m.icon"></i>
-            {{ m.label }}
-          </button>
-        </div>
-        <label v-if="showPaymentAmount && remaining > 0" class="flex items-center justify-between text-sm mb-2">
-          <span class="text-pos-muted font-semibold">المبلغ المدفوع</span>
-          <span class="flex items-center gap-1.5">
-            <input
-              v-model.number="paymentAmount"
-              type="number"
-              min="0"
-              step="0.01"
-              dir="ltr"
-              class="w-24 bg-pos-surface border border-pos-border rounded-lg px-2 py-1 text-xs text-left font-bold text-gray-700 focus:outline-none focus:border-pos-brand"
-            />
-            <span class="text-xs text-pos-muted">{{ pos.config?.currency_symbol || pos.config?.currency }}</span>
-          </span>
-        </label>
         <div class="flex items-center justify-between text-sm mb-1.5">
           <span class="text-pos-muted font-semibold">المجموع الفرعي</span>
           <span class="font-bold text-gray-700">{{ formatMoney(subtotal) }}</span>
@@ -767,12 +857,12 @@ function sheetDone(res) {
             <i class="fa-solid fa-trash text-xs"></i>
           </button>
           <button
-            @click="checkout"
-            :disabled="!canCheckout || checkingOut"
+            @click="openPayment"
+            :disabled="!canCheckout"
             class="col-span-2 pos-btn bg-pos-brand text-white text-sm font-extrabold py-2.5 rounded-xl min-h-[44px] flex items-center justify-center gap-2 hover:bg-pos-brand-dark transition-colors shadow-md shadow-pos-brand/25 disabled:opacity-40"
           >
-            <i class="fa-solid" :class="checkingOut ? 'fa-spinner fa-spin' : 'fa-credit-card'"></i>
-            {{ checkingOut ? "جارٍ الإتمام…" : "إتمام الدفع" }}
+            <i class="fa-solid fa-credit-card"></i>
+            إتمام الدفع
           </button>
         </div>
       </div>
@@ -789,8 +879,94 @@ function sheetDone(res) {
     @close="sheet.open = false"
   />
 
+  <!-- Payment -->
+  <div v-if="payOpen" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" style="backdrop-filter: blur(4px)" @click.self="payOpen = false">
+    <div class="pos-modal bg-pos-surface rounded-xl2 shadow-2xl border border-pos-border max-w-md w-full flex flex-col max-h-[90vh]">
+      <div class="px-5 py-3.5 border-b border-pos-border flex items-center justify-between flex-shrink-0">
+        <span class="flex items-center gap-2 font-extrabold text-gray-800">
+          <i class="fa-solid fa-cash-register text-pos-brand"></i> الدفع
+        </span>
+        <button @click="payOpen = false" class="text-pos-muted hover:text-pos-danger transition-colors w-8 h-8 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="px-5 py-4 overflow-y-auto flex flex-col gap-4">
+        <!-- Amount due -->
+        <div class="bg-pos-brand-light border border-pos-brand/25 rounded-xl2 px-4 py-3 text-center">
+          <p class="text-xs font-bold text-pos-brand-dark/70">المطلوب دفعه</p>
+          <p class="text-3xl font-extrabold text-pos-brand-dark leading-tight mt-0.5">{{ formatMoney(remaining) }}</p>
+          <p v-if="gift.card" class="text-[11px] font-bold text-pos-brand-dark/70 mt-1">
+            الإجمالي {{ formatMoney(total) }} · بطاقة هدية −{{ formatMoney(giftApplied) }}
+          </p>
+        </div>
+
+        <!-- Mode of payment rows: one per method on the POS Profile -->
+        <div v-if="remaining > 0" class="flex flex-col gap-2">
+          <p class="text-xs font-extrabold text-gray-700">طريقة الدفع</p>
+          <div
+            v-for="row in splits"
+            :key="row.mode_of_payment"
+            class="flex items-center gap-2 border rounded-xl px-2.5 py-2 transition-colors"
+            :class="Number(row.amount) > 0 ? 'bg-pos-brand-light/60 border-pos-brand/40' : 'bg-pos-canvas border-pos-border'"
+          >
+            <button @click="tender(row)" class="flex items-center gap-2 flex-1 min-w-0 text-right">
+              <span class="w-8 h-8 rounded-lg bg-pos-surface border border-pos-border flex items-center justify-center flex-shrink-0">
+                <i class="fa-solid text-xs" :class="[payMethods.find((m) => m.key === row.mode_of_payment)?.icon, Number(row.amount) > 0 ? 'text-pos-brand' : 'text-pos-muted']"></i>
+              </span>
+              <span class="text-sm font-bold text-gray-800 truncate">{{ payMethods.find((m) => m.key === row.mode_of_payment)?.label }}</span>
+            </button>
+            <input
+              v-model.number="row.amount"
+              type="number"
+              min="0"
+              step="0.01"
+              dir="ltr"
+              class="w-28 bg-pos-surface border border-pos-border rounded-lg px-2 py-2 text-sm text-center font-extrabold text-gray-700 focus:outline-none focus:border-pos-brand min-h-[40px]"
+            />
+          </div>
+        </div>
+        <div v-else class="flex items-center justify-center gap-2 bg-pos-green-light border border-pos-green/25 rounded-xl px-4 py-3 text-sm font-bold text-pos-green">
+          <i class="fa-solid fa-circle-check"></i> بطاقة الهدية تغطي الطلب بالكامل
+        </div>
+
+        <!-- Tendered vs due -->
+        <div v-if="remaining > 0" class="bg-pos-canvas border border-pos-border rounded-xl px-4 py-3 flex flex-col gap-1.5">
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-pos-muted font-semibold">المدفوع</span>
+            <span class="font-extrabold text-gray-800">{{ formatMoney(splitsTotal) }}</span>
+          </div>
+          <div v-if="Math.abs(splitsDiff) > 0.004" class="flex items-center justify-between text-sm">
+            <span class="text-pos-muted font-semibold">{{ splitsDiff > 0 ? "المتبقي" : cashTendered ? "الباقي للعميل" : "زيادة" }}</span>
+            <span class="font-extrabold" :class="splitsDiff > 0 ? 'text-pos-amber' : cashTendered ? 'text-pos-green' : 'text-pos-danger'">
+              {{ formatMoney(Math.abs(splitsDiff)) }}
+            </span>
+          </div>
+        </div>
+
+        <p v-if="payBlockReason" class="text-[11px] text-pos-amber font-bold flex items-center gap-1.5">
+          <i class="fa-solid fa-circle-info text-[10px]"></i> {{ payBlockReason }}
+        </p>
+        <p v-if="checkoutError" class="text-[11px] text-pos-danger font-bold flex items-center gap-1.5">
+          <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> {{ checkoutError }}
+        </p>
+      </div>
+
+      <div class="px-5 py-3.5 border-t border-pos-border flex-shrink-0">
+        <button
+          @click="checkout"
+          :disabled="!canPay || checkingOut"
+          class="w-full pos-btn bg-pos-brand text-white text-sm font-extrabold py-3 rounded-xl min-h-[48px] flex items-center justify-center gap-2 hover:bg-pos-brand-dark transition-colors shadow-md shadow-pos-brand/25 disabled:opacity-40"
+        >
+          <i class="fa-solid" :class="checkingOut ? 'fa-spinner fa-spin' : 'fa-circle-check'"></i>
+          {{ checkingOut ? "جارٍ الإتمام…" : `تأكيد الدفع ${formatMoney(remaining)}` }}
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Order completed -->
-  <div v-if="receipt" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" style="backdrop-filter: blur(4px)" @click.self="receipt = null">
+  <div v-if="receipt" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" style="backdrop-filter: blur(4px)" @click.self="dismissReceipt()">
     <div class="pos-modal bg-pos-surface rounded-xl2 shadow-2xl border border-pos-border p-8 flex flex-col items-center gap-4 max-w-sm w-full text-center">
       <div class="w-16 h-16 bg-pos-green-light rounded-full flex items-center justify-center"><i class="fa-solid fa-circle-check text-pos-green text-3xl"></i></div>
       <div>
@@ -805,7 +981,7 @@ function sheetDone(res) {
         <div v-if="receipt.change_amount" class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold">الباقي للعميل</span><span class="font-bold text-pos-brand-dark">{{ formatMoney(receipt.change_amount) }}</span></div>
       </div>
       <button @click="printReceipt(receipt.name)" class="bg-pos-canvas border border-pos-border text-pos-brand-dark font-extrabold text-sm px-8 py-2.5 rounded-xl min-h-[44px] hover:border-pos-brand transition-colors w-full"><i class="fa-solid fa-print ml-2"></i>طباعة الإيصال</button>
-      <button @click="receipt = null" class="bg-pos-brand text-white font-extrabold text-sm px-8 py-2.5 rounded-xl min-h-[44px] hover:bg-pos-brand-dark transition-colors w-full">طلب جديد</button>
+      <button @click="dismissReceipt()" class="bg-pos-brand text-white font-extrabold text-sm px-8 py-2.5 rounded-xl min-h-[44px] hover:bg-pos-brand-dark transition-colors w-full">طلب جديد</button>
     </div>
   </div>
 </template>

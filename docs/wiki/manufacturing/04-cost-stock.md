@@ -42,7 +42,7 @@
 
 تربط الحركات الثلاث بحقل **Production Batch** وبمحطة العمل.
 
-> **موضع صورة:** [أضف هنا لقطة شاشة من ERPNext لحركات Stock Entry المرتبطة بدفعة واحدة]
+![حركات Stock Entry الثلاث المرتبطة بدفعة واحدة في ERPNext](/files/04-stock-entries.png)
 
 ## تشغيلات المخزون وFEFO
 

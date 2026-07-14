@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from losand.api.manufacture import _last_receipt_rate, _stock_map, _stock_rows, cfg
+from losand.setup.publish_print_formats import RECEIPT_FORMAT_NAME
 
 # The portal uses the standard ERPNext POS Profile as its single source of truth
 # and submits server-side Sales Invoices.
@@ -15,6 +16,17 @@ from losand.api.manufacture import _last_receipt_rate, _stock_map, _stock_rows, 
 def _require_login():
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Login required"), frappe.PermissionError)
+
+
+POS_MANAGER_ROLES = {"POS Manager", "System Manager"}
+
+
+def _require_pos_manager():
+	"""Gate for actions that reverse a submitted invoice's stock/GL impact
+	(return, edit, delete) — any cashier can view history, only a supervisor
+	can void or rewrite what already posted."""
+	if not POS_MANAGER_ROLES & set(frappe.get_roles()):
+		frappe.throw(_("Only a POS Manager can do this."), frappe.PermissionError)
 
 
 def _resolve_pos_profile(name=None):
@@ -88,8 +100,13 @@ def get_pos_config(pos_profile=None):
 	_require_login()
 	p = _resolve_pos_profile(pos_profile)
 	symbol = frappe.db.get_value("Currency", p.currency, "symbol") or p.currency
+	mop_types = {
+		r.mode_of_payment: frappe.get_cached_value("Mode of Payment", r.mode_of_payment, "type")
+		for r in p.payments
+	}
 	return {
 		"pos_profile": p.name,
+		"is_pos_manager": bool(POS_MANAGER_ROLES & set(frappe.get_roles())),
 		"company": p.company,
 		"warehouse": p.warehouse,
 		"currency": p.currency,
@@ -105,7 +122,11 @@ def get_pos_config(pos_profile=None):
 			for row in (p.applicable_for_users or [])
 		],
 		"payments": [
-			{"mode_of_payment": r.mode_of_payment, "default": bool(r.default)}
+			{
+				"mode_of_payment": r.mode_of_payment,
+				"default": bool(r.default),
+				"type": mop_types.get(r.mode_of_payment),
+			}
 			for r in p.payments
 		],
 		"item_groups": [r.item_group for r in (p.item_groups or [])],
@@ -121,7 +142,10 @@ def get_pos_config(pos_profile=None):
 		"allow_discount_change": bool(p.allow_discount_change),
 		"disable_grand_total_to_default_mop": bool(p.disable_grand_total_to_default_mop),
 		"allow_partial_payment": bool(p.allow_partial_payment),
-		"print_format": p.print_format,
+		# Resolved server-side so the clients don't each carry a default. Falls back to
+		# our receipt, not ERPNext's stock "POS Invoice" (which is registered against the
+		# POS Invoice doctype, not Sales Invoice).
+		"print_format": p.print_format or RECEIPT_FORMAT_NAME,
 		"letter_head": p.letter_head,
 		"terms_and_conditions": p.tc_name,
 		"print_heading": p.select_print_heading,
@@ -560,12 +584,15 @@ def submit_order(cart, payments, discount=0, pos_profile=None, request_id=None, 
 		# FEFO allocator: one SI row per batch. Non-stock add-ons return a single
 		# (None, qty) row. A client rate is only present when the profile permits it.
 		stock_rows = _stock_rows(code, p.warehouse, qty) if p.update_stock else [(None, qty)]
+		note = line.get("note")
 		for batch_no, q in stock_rows:
 			row = {"item_code": code, "qty": q}
 			if client_rate is not None:
 				row.update({"rate": flt(client_rate), "price_list_rate": flt(client_rate)})
 			if batch_no:
 				row.update({"use_serial_batch_fields": 1, "batch_no": batch_no, "warehouse": p.warehouse})
+			if note:
+				row["losand_kitchen_note"] = note
 			si.append("items", row)
 	if not si.get("items"):
 		frappe.throw(_("Cart is empty."))
@@ -957,3 +984,93 @@ def close_shift(counted=None):
 	doc.insert(ignore_permissions=True)
 	frappe.db.commit()
 	return {"name": doc.name, "sales_total": sales_total, "reconciliation": recon}
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — invoice history for the current shift + return / edit / delete
+# ---------------------------------------------------------------------------
+@frappe.whitelist()
+def get_shift_invoices():
+	"""Sales Invoices created during the CURRENT open shift, for the cashier's
+	history screen. Read-only — any logged-in POS user can see it; the
+	destructive actions below (return/edit/delete) are supervisor-gated."""
+	_require_login()
+	shift = _open_shift()
+	if not shift:
+		frappe.throw(_("No open shift."))
+	opening = frappe.get_doc("POS Opening Entry", shift["name"])
+	return frappe.get_all(
+		"Sales Invoice",
+		filters={
+			"is_pos": 1,
+			"pos_profile": opening.pos_profile,
+			"owner": frappe.session.user,
+			"creation": ["between", [opening.period_start_date, frappe.utils.now_datetime()]],
+			"docstatus": ["!=", 2],
+		},
+		fields=["name", "customer", "grand_total", "paid_amount", "posting_date", "po_no", "docstatus", "is_return"],
+		order_by="creation desc",
+	)
+
+
+@frappe.whitelist()
+def return_invoice(invoice):
+	"""Create and submit a return (credit note) against a submitted POS invoice —
+	the audit-safe way to undo a sale: the original stays on record, a negative
+	invoice offsets its stock and GL impact. Supervisor-only."""
+	_require_login()
+	_require_pos_manager()
+	from erpnext.controllers.sales_and_purchase_return import make_return_doc
+
+	original = frappe.get_doc("Sales Invoice", invoice)
+	if original.docstatus != 1:
+		frappe.throw(_("Only a submitted invoice can be returned."))
+	return_doc = make_return_doc("Sales Invoice", invoice)
+	return_doc.flags.ignore_permissions = True
+	return_doc.insert(ignore_permissions=True)
+	return_doc.submit()
+	frappe.db.commit()
+	return {"name": return_doc.name, "return_against": invoice}
+
+
+@frappe.whitelist()
+def edit_invoice(invoice):
+	"""Cancel a submitted invoice and hand its item lines back to the register so
+	the cashier can re-key and re-submit a corrected order. Supervisor-only —
+	cancelling reverses the original's stock and GL impact.
+
+	ponytail: per-piece add-ons/notes aren't reconstructable (they were already
+	flattened into plain Item rows at checkout, same simplification as elsewhere
+	in this app) — the cart comes back as flat item/qty/rate lines, not the
+	original pieces/extras structure. The cashier re-applies any customization."""
+	_require_login()
+	_require_pos_manager()
+	doc = frappe.get_doc("Sales Invoice", invoice)
+	if doc.docstatus != 1:
+		frappe.throw(_("Only a submitted invoice can be edited."))
+	merged = {}
+	for row in doc.items:
+		line = merged.setdefault(
+			row.item_code, {"item_code": row.item_code, "item_name": row.item_name, "qty": 0, "rate": row.rate}
+		)
+		line["qty"] += flt(row.qty)
+	table = doc.po_no
+	doc.flags.ignore_permissions = True
+	doc.cancel()
+	frappe.db.commit()
+	return {"cart": list(merged.values()), "table": table}
+
+
+@frappe.whitelist()
+def delete_invoice(invoice):
+	"""Cancel (if submitted) and permanently delete an invoice — fully unwinds the
+	transaction rather than leaving an audit trail. Supervisor-only, irreversible."""
+	_require_login()
+	_require_pos_manager()
+	doc = frappe.get_doc("Sales Invoice", invoice)
+	if doc.docstatus == 1:
+		doc.flags.ignore_permissions = True
+		doc.cancel()
+	frappe.delete_doc("Sales Invoice", invoice, ignore_permissions=True, force=True)
+	frappe.db.commit()
+	return {"name": invoice}

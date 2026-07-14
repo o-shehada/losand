@@ -16,3 +16,20 @@ export const unitPrice = (line) => line.price + (isUniform(line) ? extrasSum(lin
 // Gift card credits min(card, total); the rest is paid by another method.
 export const giftApplied = (total, cardValue) => Math.min(cardValue, total)
 export const giftRemaining = (total, cardValue) => Math.max(0, total - giftApplied(total, cardValue))
+
+// --- Payment tender (the modal's {mode_of_payment, amount} rows) ---
+
+export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+export const tenderedTotal = (splits) => round2(splits.reduce((s, r) => s + Number(r.amount || 0), 0))
+// Positive = still short of the balance; negative = paid in excess.
+export const tenderDiff = (remaining, splits) => round2(remaining - tenderedTotal(splits))
+
+// Amount a row should hold to cover whatever the other rows leave unpaid.
+export const tenderFill = (remaining, splits, row) =>
+  Math.max(0, round2(remaining - round2(tenderedTotal(splits) - Number(row.amount || 0))))
+
+// ERPNext computes change_amount only when a Cash-type Mode of Payment is
+// tendered (see calculate_change_amount). Overpaying on a card posts a negative
+// outstanding — a customer credit — instead of giving change back.
+export const canGiveChange = (splits, typeOf) =>
+  splits.some((r) => Number(r.amount || 0) > 0 && typeOf(r.mode_of_payment) === "Cash")

@@ -34,8 +34,10 @@ app_logo_url = "/assets/losand/images/losand-logo.jpg"
 # app_include_js = "/assets/losand/js/losand.js"
 
 # include js, css files in header of web template
-# web_include_css = "/assets/losand/css/losand.css"
-# web_include_js = "/assets/losand/js/losand.js"
+
+# Force RTL on the Wiki app's pages: it never sets dir/lang itself, which
+# left our Arabic manual laid out LTR (sidebar/TOC on the wrong side, etc).
+web_include_js = "/assets/losand/js/wiki_rtl.js"
 
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "losand/public/scss/website"
@@ -99,7 +101,14 @@ website_route_rules = [
 # after_install = "losand.install.after_install"
 
 # Re-seed Arabic translation overrides (ERPNext ar overrides our app CSV for shared strings).
-after_migrate = ["losand.setup.arabic_translations.run"]
+# Then (re)publish the manufacturing manual into the Wiki app, if installed: upload the
+# screenshots as Files first, then create/update the Wiki Pages that embed them.
+after_migrate = [
+	"losand.setup.arabic_translations.run",
+	"losand.setup.upload_wiki_images.run",
+	"losand.setup.publish_manufacturing_wiki.run",
+	"losand.setup.publish_print_formats.run",
+]
 
 # Fixtures
 # --------
@@ -115,6 +124,7 @@ fixtures = [
 			"Stock Entry-custom_production_batch",
 			"Stock Entry-custom_workbench",
 			"Sales Invoice-losand_pos_request_id",
+			"Sales Invoice Item-losand_kitchen_note",
 		]]],
 	},
 	{

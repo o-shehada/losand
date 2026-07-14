@@ -115,6 +115,22 @@ export async function discardParked(name) {
   return call("losand.api.pos.discard_parked", { name })
 }
 
+export async function getShiftInvoices() {
+  return call("losand.api.pos.get_shift_invoices")
+}
+
+export async function returnInvoice(invoice) {
+  return call("losand.api.pos.return_invoice", { invoice })
+}
+
+export async function editInvoice(invoice) {
+  return call("losand.api.pos.edit_invoice", { invoice })
+}
+
+export async function deleteInvoice(invoice) {
+  return call("losand.api.pos.delete_invoice", { invoice })
+}
+
 export async function login(username, password) {
   return call("login", { usr: username, pwd: password })
 }

@@ -34,7 +34,7 @@ const documentSettings = computed(() => [
   { label: "الضرائب والرسوم", value: pos.config?.taxes_and_charges || "بدون قالب" },
   { label: "فئة الضريبة", value: pos.config?.tax_category || "غير محددة" },
   { label: "تطبيق الخصم على", value: pos.config?.apply_discount_on },
-  { label: "صيغة الطباعة", value: pos.config?.print_format || "POS Invoice" },
+  { label: "صيغة الطباعة", value: pos.config?.print_format },
   { label: "الترويسة", value: pos.config?.letter_head || "الافتراضية" },
   { label: "عنوان الطباعة", value: pos.config?.print_heading || "الافتراضي" },
   { label: "الشروط والأحكام", value: pos.config?.terms_and_conditions || "غير محددة" },

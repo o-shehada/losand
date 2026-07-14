@@ -1,6 +1,11 @@
 """Publish the Arabic manufacturing manual into the installed Frappe Wiki app.
 
-Run:
+Runs automatically on `bench migrate` (see hooks.after_migrate), after
+losand.setup.upload_wiki_images.run has uploaded the screenshots the manual
+embeds. Safe to call repeatedly: pages are matched and updated by route
+instead of duplicated.
+
+Run manually:
     bench --site <site> execute losand.setup.publish_manufacturing_wiki.run
 """
 
@@ -28,13 +33,15 @@ def _manual_dir():
 def run(space_route="wiki"):
 	"""Create or update the manual pages and add them to an existing Wiki Space."""
 	if "wiki" not in frappe.get_installed_apps():
-		frappe.throw("The Wiki app is not installed on this site.")
+		return {"space": None, "pages": []}
 
 	space_name = frappe.db.get_value("Wiki Space", {"route": space_route}, "name")
-	if not space_name:
-		frappe.throw(f"Wiki Space with route '{space_route}' was not found.")
-
-	space = frappe.get_doc("Wiki Space", space_name)
+	if space_name:
+		space = frappe.get_doc("Wiki Space", space_name)
+	else:
+		# The Wiki app normally creates the default "wiki" space on its own
+		# install; create it here too so migrate order can't strand this page set.
+		space = frappe.get_doc({"doctype": "Wiki Space", "route": space_route}).insert(ignore_permissions=True)
 	sidebar_by_page = {row.wiki_page: row for row in space.wiki_sidebars}
 	routes = []
 

@@ -11,6 +11,7 @@ import PosOpening from "@/features/pos/PosOpening.vue"
 import PosClosing from "@/features/pos/PosClosing.vue"
 import PosRegister from "@/features/pos/PosRegister.vue"
 import PosOrders from "@/features/pos/PosOrders.vue"
+import PosHistory from "@/features/pos/PosHistory.vue"
 import PosInventory from "@/features/pos/PosInventory.vue"
 import PosStocktake from "@/features/pos/PosStocktake.vue"
 import PosReceiving from "@/features/pos/PosReceiving.vue"
@@ -42,6 +43,7 @@ const posRoutes = [
     component: PosShell,
     children: [
       { path: "", name: "pos-register", component: PosRegister },
+      { path: "history", name: "pos-history", component: PosHistory },
       { path: "orders", name: "pos-orders", component: PosOrders },
       { path: "inventory", name: "pos-inventory", component: PosInventory },
       { path: "stocktake", name: "pos-stocktake", component: PosStocktake },

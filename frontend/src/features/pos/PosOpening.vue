@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted } from "vue"
+import { ref, reactive, computed, onMounted } from "vue"
 import { useRouter } from "vue-router"
 import { createOpeningShift } from "@/lib/api"
 import { pos, ensurePos, setShift } from "@/stores/pos"
@@ -10,9 +10,13 @@ const opening = reactive({}) // { [mode]: amount }
 const submitting = ref(false)
 const error = ref("")
 
+// Only Cash modes hold a physical float to count at open — Card/Bank settle
+// electronically and have nothing to declare.
+const cashMethods = computed(() => (pos.config?.payments || []).filter((p) => p.type === "Cash"))
+
 onMounted(async () => {
   await ensurePos()
-  for (const p of pos.config?.payments || []) {
+  for (const p of cashMethods.value) {
     if (!(p.mode_of_payment in opening)) opening[p.mode_of_payment] = 0
   }
 })
@@ -26,7 +30,7 @@ async function openShift() {
   }
   submitting.value = true
   try {
-    const balances = (cfg.payments || []).map((p) => ({
+    const balances = cashMethods.value.map((p) => ({
       mode_of_payment: p.mode_of_payment,
       opening_amount: Number(opening[p.mode_of_payment] || 0),
     }))
@@ -56,14 +60,14 @@ async function openShift() {
 
       <p class="text-xs font-extrabold text-gray-700 mb-2 pr-2 border-r-4 border-pos-brand">رصيد افتتاح الصندوق</p>
       <div class="flex flex-col gap-3 mb-5">
-        <label v-for="p in pos.config?.payments || []" :key="p.mode_of_payment" class="flex items-center justify-between gap-3 bg-pos-canvas border border-pos-border rounded-xl px-3 py-2.5">
+        <label v-for="p in cashMethods" :key="p.mode_of_payment" class="flex items-center justify-between gap-3 bg-pos-canvas border border-pos-border rounded-xl px-3 py-2.5">
           <span class="text-sm font-bold text-gray-700 flex items-center gap-2"><i class="fa-solid fa-wallet text-pos-brand text-xs"></i> {{ p.mode_of_payment }}</span>
           <span class="flex items-center gap-1.5">
             <input v-model.number="opening[p.mode_of_payment]" type="number" min="0" dir="ltr" class="w-28 bg-pos-surface border border-pos-border rounded-lg px-2 py-1.5 text-sm font-bold text-gray-700 text-center focus:outline-none focus:border-pos-brand" />
             <span class="text-xs text-pos-muted font-semibold">{{ pos.config?.currency_symbol || pos.config?.currency }}</span>
           </span>
         </label>
-        <p v-if="!(pos.config?.payments || []).length" class="text-center text-pos-muted text-xs font-semibold py-4">لا توجد طرق دفع في ملف نقاط البيع</p>
+        <p v-if="!cashMethods.length" class="text-center text-pos-muted text-xs font-semibold py-4">لا توجد طريقة دفع نقدي في ملف نقاط البيع</p>
       </div>
 
       <p v-if="error" class="text-xs text-pos-danger font-bold mb-3 text-center">{{ error }}</p>

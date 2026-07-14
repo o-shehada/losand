@@ -1,0 +1,122 @@
+{#
+  Customer receipt for POS Sales Invoices — replaces ERPNext's stock "POS Invoice"
+  format (which crams the unit price under the qty and lists paid add-ons as
+  loose top-level items).
+
+  Add-ons are Items in the "POS Add-ons" Item Group (ADDON_GROUP in losand/api/pos.py)
+  and submit_order() appends each base line immediately before its own add-on rows,
+  so row order is the parent link — no extra field needed. An add-on attaches to the
+  nearest preceding non-add-on row.
+#}
+{%- set addon_group = "POS Add-ons" -%}
+{%- set ns = namespace(groups=[]) -%}
+{%- for item in doc.items -%}
+  {%- if item.item_group == addon_group and ns.groups -%}
+    {%- set _ = ns.groups[-1]["addons"].append(item) -%}
+  {%- else -%}
+    {%- set _ = ns.groups.append({"base": item, "addons": []}) -%}
+  {%- endif -%}
+{%- endfor -%}
+
+<div style="font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 10px; max-width: 320px; margin: 0 auto; color: #111;">
+  {% if letter_head %}{{ letter_head }}{% endif %}
+
+  <h2 style="text-align:center; margin:0 0 2px; font-size:18px;">{{ doc.company }}</h2>
+  <p style="text-align:center; margin:0 0 10px; font-size:13px; font-weight:bold;">
+    {{ doc.select_print_heading or "فاتورة" }}
+  </p>
+
+  <table style="width:100%; font-size:11px; margin-bottom:8px;">
+    <tr><td style="padding:1px 0;">رقم الفاتورة</td><td style="text-align:left; font-weight:bold;">{{ doc.name }}</td></tr>
+    <tr><td style="padding:1px 0;">الكاشير</td><td style="text-align:left;">{{ frappe.db.get_value("User", doc.owner, "full_name") or doc.owner }}</td></tr>
+    <tr><td style="padding:1px 0;">العميل</td><td style="text-align:left;">{{ doc.customer_name }}</td></tr>
+    {% if doc.po_no %}<tr><td style="padding:1px 0;">الطاولة</td><td style="text-align:left;">{{ doc.po_no }}</td></tr>{% endif %}
+    <tr>
+      <td style="padding:1px 0;">التاريخ</td>
+      <td style="text-align:left;">{{ doc.get_formatted("posting_date") }} — {{ (doc.posting_time|string).split('.')[0] }}</td>
+    </tr>
+  </table>
+
+  <table style="width:100%; border-collapse:collapse; font-size:12px;">
+    <thead>
+      <tr style="border-top:1px solid #000; border-bottom:1px solid #000;">
+        <th style="text-align:right; padding:5px 0; font-weight:bold;">الصنف</th>
+        <th style="text-align:center; padding:5px 2px; font-weight:bold; width:34px;">الكمية</th>
+        <th style="text-align:left; padding:5px 2px; font-weight:bold; width:62px;">السعر</th>
+        <th style="text-align:left; padding:5px 0; font-weight:bold; width:70px;">الإجمالي</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for group in ns.groups %}
+      {% set row = group["base"] %}
+      <tr>
+        <td style="padding:6px 0 0;">{{ row.item_name }}</td>
+        {# %g drops the trailing zeros Frappe's float precision adds (2.000 → 2, 1.5 stays 1.5) #}
+        <td style="text-align:center; padding:6px 2px 0;">{{ "%g"|format(row.qty) }}</td>
+        <td style="text-align:left; padding:6px 2px 0; white-space:nowrap;">{{ row.get_formatted("rate") }}</td>
+        <td style="text-align:left; padding:6px 0 0; white-space:nowrap;">{{ row.get_formatted("amount") }}</td>
+      </tr>
+      {% if row.losand_kitchen_note %}
+      <tr>
+        <td colspan="4" style="padding:1px 10px 0 0; font-size:10px; color:#666;">— {{ row.losand_kitchen_note }}</td>
+      </tr>
+      {% endif %}
+      {% for addon in group["addons"] %}
+      <tr style="color:#555;">
+        <td style="padding:1px 10px 0 0; font-size:11px;">+ {{ addon.item_name }}</td>
+        <td style="text-align:center; padding:1px 2px 0; font-size:11px;">{{ "%g"|format(addon.qty) }}</td>
+        <td style="text-align:left; padding:1px 2px 0; font-size:11px; white-space:nowrap;">{{ addon.get_formatted("rate") }}</td>
+        <td style="text-align:left; padding:1px 0 0; font-size:11px; white-space:nowrap;">{{ addon.get_formatted("amount") }}</td>
+      </tr>
+      {% endfor %}
+      <tr><td colspan="4" style="border-bottom:1px dashed #ccc; padding-top:6px;"></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table style="width:100%; font-size:12px; margin-top:8px;">
+    <tr>
+      <td style="padding:2px 0;">المجموع</td>
+      <td style="text-align:left;">{{ doc.get_formatted("total") }}</td>
+    </tr>
+    {% if doc.discount_amount %}
+    <tr>
+      <td style="padding:2px 0;">الخصم</td>
+      <td style="text-align:left;">−{{ doc.get_formatted("discount_amount") }}</td>
+    </tr>
+    {% endif %}
+    {% for tax in doc.taxes %}
+      {% if tax.tax_amount %}
+      <tr>
+        <td style="padding:2px 0;">{{ tax.description }}</td>
+        <td style="text-align:left;">{{ tax.get_formatted("tax_amount") }}</td>
+      </tr>
+      {% endif %}
+    {% endfor %}
+    <tr style="border-top:1px solid #000; font-weight:bold; font-size:14px;">
+      <td style="padding:5px 0;">الإجمالي النهائي</td>
+      <td style="text-align:left; padding:5px 0;">
+        {{ doc.get_formatted("rounded_total") if doc.rounded_total else doc.get_formatted("grand_total") }}
+      </td>
+    </tr>
+  </table>
+
+  {% if doc.payments %}
+  <table style="width:100%; font-size:12px; margin-top:6px; border-top:1px dashed #999;">
+    {% for pay in doc.payments %}
+    <tr>
+      <td style="padding:3px 0;">{{ _(pay.mode_of_payment) }}</td>
+      <td style="text-align:left;">{{ pay.get_formatted("amount") }}</td>
+    </tr>
+    {% endfor %}
+    {% if doc.change_amount %}
+    <tr style="font-weight:bold;">
+      <td style="padding:3px 0;">الباقي للعميل</td>
+      <td style="text-align:left;">{{ doc.get_formatted("change_amount") }}</td>
+    </tr>
+    {% endif %}
+  </table>
+  {% endif %}
+
+  <p style="text-align:center; margin:14px 0 0; font-size:12px; font-weight:bold;">شكراً لزيارتكم</p>
+</div>
