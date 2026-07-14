@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from "vue"
 import { ORDER_COLUMNS, ORDERS, orderType, orderTotal, BRANCH, money, ar } from "./data"
+import { pos } from "@/stores/pos"
 
 const colOrders = (key) => ORDERS.filter((o) => o.col === key)
 const counts = computed(() => Object.fromEntries(ORDER_COLUMNS.map((c) => [c.key, colOrders(c.key).length])))
@@ -38,7 +39,7 @@ const timeIcon = (t) => (t === "late" ? "fa-triangle-exclamation" : "fa-clock")
         <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-pos-muted text-sm"></i>
       </div>
       <div class="pos-shift-pill text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-        <i class="fa-solid fa-sun text-yellow-200 text-xs"></i><span>وردية الصباح</span>
+        <i class="fa-solid fa-sun text-yellow-200 text-xs"></i><span>{{ pos.config?.pos_profile || "…" }}</span>
       </div>
       <div class="flex items-center gap-1.5 bg-pos-brand-light border border-pos-brand/30 rounded-xl px-2.5 py-2 min-h-[44px]">
         <i class="fa-solid fa-rotate text-pos-brand text-xs pos-sync-dot"></i>

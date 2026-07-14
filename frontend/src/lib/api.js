@@ -3,6 +3,31 @@ const headers = {
   "X-Frappe-CSRF-Token": window.csrf_token || "",
 }
 
+function messageText(value) {
+  if (typeof value !== "string") return value?.message
+  try {
+    return JSON.parse(value)?.message || value
+  } catch {
+    return value
+  }
+}
+
+function serverMessage(data) {
+  const fallback = messageText(data.message) || "Request failed"
+  if (!data._server_messages) return fallback
+
+  try {
+    const parsed = JSON.parse(data._server_messages)
+    const entries = Array.isArray(parsed) ? parsed : [parsed]
+    return entries
+      .map(messageText)
+      .filter(Boolean)
+      .join("\n") || fallback
+  } catch {
+    return fallback
+  }
+}
+
 export async function call(method, payload = {}) {
   const response = await fetch(`/api/method/${method}`, {
     method: "POST",
@@ -13,10 +38,7 @@ export async function call(method, payload = {}) {
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok || data.exc) {
-    const message = data._server_messages
-      ? JSON.parse(data._server_messages).join("\n")
-      : data.message || "Request failed"
-    throw new Error(message)
+    throw new Error(serverMessage(data))
   }
   return data.message
 }
@@ -35,6 +57,10 @@ export async function getPosProducts(params = {}) {
 
 export async function getPosExtras() {
   return call("losand.api.pos.get_extras")
+}
+
+export async function previewOrder(payload) {
+  return call("losand.api.pos.preview_order", payload)
 }
 
 export async function checkOpeningShift() {

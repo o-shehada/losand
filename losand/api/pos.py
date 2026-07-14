@@ -4,14 +4,12 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 from losand.api.manufacture import _last_receipt_rate, _stock_map, _stock_rows, cfg
 
-# Phase 0 of wiring the losand POS portal to ERPNext. Reads only — real items,
-# prices, and stock for the register. Config comes from the stock ERPNext
-# POS Profile (no custom doctype). Invoicing arrives in Phase 1 the posawesome
-# way (server-side Sales Invoice submit).
+# The portal uses the standard ERPNext POS Profile as its single source of truth
+# and submits server-side Sales Invoices.
 
 
 def _require_login():
@@ -22,17 +20,27 @@ def _require_login():
 def _resolve_pos_profile(name=None):
 	"""Pick the POS Profile: explicit arg → one the user is applicable for →
 	first enabled for the default company."""
-	if name and frappe.db.exists("POS Profile", name):
+	if name:
+		if not frappe.db.exists("POS Profile", name):
+			frappe.throw(_("POS Profile {0} does not exist.").format(name))
+		if frappe.db.get_value("POS Profile", name, "disabled"):
+			frappe.throw(_("POS Profile {0} is disabled.").format(name))
+		assigned_users = frappe.get_all(
+			"POS Profile User", filters={"parent": name, "parenttype": "POS Profile"}, pluck="user"
+		)
+		if assigned_users and frappe.session.user not in assigned_users:
+			frappe.throw(_("POS Profile {0} is not assigned to this user.").format(name), frappe.PermissionError)
 		return frappe.get_cached_doc("POS Profile", name)
 
 	linked = frappe.get_all(
 		"POS Profile User",
 		filters={"user": frappe.session.user, "parenttype": "POS Profile"},
-		pluck="parent",
+		fields=["parent", "default"],
+		order_by="`default` desc, idx asc",
 	)
-	for p in linked:
-		if not frappe.db.get_value("POS Profile", p, "disabled"):
-			return frappe.get_cached_doc("POS Profile", p)
+	for row in linked:
+		if not frappe.db.get_value("POS Profile", row.parent, "disabled"):
+			return frappe.get_cached_doc("POS Profile", row.parent)
 
 	filters = {"disabled": 0}
 	company = frappe.defaults.get_global_default("company")
@@ -45,10 +53,38 @@ def _resolve_pos_profile(name=None):
 	frappe.throw(_("No POS Profile is configured. Create one in ERPNext first."))
 
 
+def _expanded_groups(doctype, configured):
+	"""Expand configured tree nodes to include descendants."""
+	if not configured:
+		return []
+
+	groups = set()
+	for group in configured:
+		bounds = frappe.db.get_value(doctype, group, ["lft", "rgt"], as_dict=True)
+		if not bounds:
+			continue
+		groups.update(
+			frappe.get_all(
+				doctype,
+				filters=[["lft", ">=", bounds.lft], ["rgt", "<=", bounds.rgt]],
+				pluck="name",
+			)
+		)
+	return sorted(groups)
+
+
+def _expanded_item_groups(profile):
+	"""Profile item groups include their descendants, matching ERPNext POS."""
+	return _expanded_groups("Item Group", [row.item_group for row in (profile.item_groups or [])])
+
+
 @frappe.whitelist()
 def get_pos_config(pos_profile=None):
-	"""POS Profile config the register needs: warehouse, price list, currency,
-	payment methods, default customer. Nothing hardcoded — all from the profile."""
+	"""Return the standard ERPNext POS Profile settings used by the portal.
+
+	Operational flags stay flat in the response so every POS screen consumes one
+	source of truth. Accounting defaults are applied to the invoice server-side.
+	"""
 	_require_login()
 	p = _resolve_pos_profile(pos_profile)
 	symbol = frappe.db.get_value("Currency", p.currency, "symbol") or p.currency
@@ -60,11 +96,47 @@ def get_pos_config(pos_profile=None):
 		"currency_symbol": symbol,
 		"price_list": p.selling_price_list,
 		"customer": p.customer,
+		"country": p.country,
+		"disabled": bool(p.disabled),
+		"company_address": p.company_address,
+		"campaign": p.campaign,
+		"applicable_users": [
+			{"user": row.user, "default": bool(row.default)}
+			for row in (p.applicable_for_users or [])
+		],
 		"payments": [
 			{"mode_of_payment": r.mode_of_payment, "default": bool(r.default)}
 			for r in p.payments
 		],
 		"item_groups": [r.item_group for r in (p.item_groups or [])],
+		"customer_groups": [r.customer_group for r in (p.customer_groups or [])],
+		"hide_images": bool(p.hide_images),
+		"hide_unavailable_items": bool(p.hide_unavailable_items),
+		"auto_add_item_to_cart": bool(p.auto_add_item_to_cart),
+		"validate_stock_on_save": bool(p.validate_stock_on_save),
+		"print_receipt_on_order_complete": bool(p.print_receipt_on_order_complete),
+		"update_stock": bool(p.update_stock),
+		"ignore_pricing_rule": bool(p.ignore_pricing_rule),
+		"allow_rate_change": bool(p.allow_rate_change),
+		"allow_discount_change": bool(p.allow_discount_change),
+		"disable_grand_total_to_default_mop": bool(p.disable_grand_total_to_default_mop),
+		"allow_partial_payment": bool(p.allow_partial_payment),
+		"print_format": p.print_format,
+		"letter_head": p.letter_head,
+		"terms_and_conditions": p.tc_name,
+		"print_heading": p.select_print_heading,
+		"taxes_and_charges": p.taxes_and_charges,
+		"tax_category": p.tax_category,
+		"apply_discount_on": p.apply_discount_on,
+		"disable_rounded_total": bool(p.disable_rounded_total),
+		"write_off_account": p.write_off_account,
+		"write_off_cost_center": p.write_off_cost_center,
+		"write_off_limit": float(p.write_off_limit or 0),
+		"account_for_change_amount": p.account_for_change_amount,
+		"income_account": p.income_account,
+		"expense_account": p.expense_account,
+		"cost_center": p.cost_center,
+		"project": p.project,
 	}
 
 
@@ -77,10 +149,17 @@ def get_products(pos_profile=None, item_group=None, search=None):
 	p = _resolve_pos_profile(pos_profile)
 	price_list = p.selling_price_list
 	warehouse = p.warehouse
-	allowed_groups = [r.item_group for r in (p.item_groups or [])]
+	allowed_groups = _expanded_item_groups(p)
 
-	filters = [["disabled", "=", 0], ["is_sales_item", "=", 1]]
+	filters = [
+		["disabled", "=", 0],
+		["is_sales_item", "=", 1],
+		["has_variants", "=", 0],
+		["is_fixed_asset", "=", 0],
+	]
 	if item_group and item_group != "all":
+		if allowed_groups and item_group not in allowed_groups:
+			return {"categories": [], "products": []}
 		filters.append(["item_group", "=", item_group])
 	elif allowed_groups:
 		filters.append(["item_group", "in", allowed_groups])
@@ -90,7 +169,7 @@ def get_products(pos_profile=None, item_group=None, search=None):
 	items = frappe.get_all(
 		"Item",
 		filters=filters,
-		fields=["item_code", "item_name", "item_group", "image", "stock_uom"],
+		fields=["item_code", "item_name", "item_group", "image", "stock_uom", "is_stock_item"],
 		order_by="item_name asc",
 	)
 	codes = [i.item_code for i in items]
@@ -106,20 +185,23 @@ def get_products(pos_profile=None, item_group=None, search=None):
 
 	stock = _stock_map(codes, warehouse) if warehouse else {}
 
-	products = [
-		{
+	products = []
+	for i in items:
+		available_qty = float(stock.get(i.item_code, {}).get("qty") or 0)
+		if p.hide_unavailable_items and i.is_stock_item and available_qty <= 0:
+			continue
+		products.append({
 			"id": i.item_code,
 			"name": i.item_name,
 			"category": i.item_group,
 			"price": float(price_map.get(i.item_code) or 0),
-			"img": i.image,
+			"img": None if p.hide_images else i.image,
 			"uom": i.stock_uom,
-			"available_qty": float(stock.get(i.item_code, {}).get("qty") or 0),
-		}
-		for i in items
-	]
+			"is_stock_item": bool(i.is_stock_item),
+			"available_qty": available_qty,
+		})
 
-	groups = allowed_groups or sorted({i.item_group for i in items})
+	groups = sorted({product["category"] for product in products})
 	categories = [{"key": g, "label": g} for g in groups]
 	return {"categories": categories, "products": products}
 
@@ -154,10 +236,13 @@ def get_extras(pos_profile=None):
 	if not frappe.db.exists("Item Group", ADDON_GROUP):
 		return []
 	p = _resolve_pos_profile(pos_profile)
+	allowed_groups = _expanded_item_groups(p)
+	if allowed_groups and ADDON_GROUP not in allowed_groups:
+		return []
 	items = frappe.get_all(
 		"Item",
 		filters={"item_group": ADDON_GROUP, "disabled": 0, "is_sales_item": 1},
-		fields=["item_code", "item_name"],
+		fields=["item_code", "item_name", "stock_uom", "is_stock_item"],
 		order_by="item_name asc",
 	)
 	codes = [i.item_code for i in items]
@@ -169,10 +254,23 @@ def get_extras(pos_profile=None):
 			fields=["item_code", "price_list_rate"],
 		):
 			price_map.setdefault(pr.item_code, pr.price_list_rate)
-	return [
-		{"id": i.item_code, "item_code": i.item_code, "name": i.item_name, "price": float(price_map.get(i.item_code) or 0)}
-		for i in items
-	]
+	stock = _stock_map(codes, p.warehouse) if p.warehouse else {}
+	extras = []
+	for item in items:
+		available_qty = float(stock.get(item.item_code, {}).get("qty") or 0)
+		if p.hide_unavailable_items and item.is_stock_item and available_qty <= 0:
+			continue
+		extras.append(
+			{
+				"id": item.item_code,
+				"item_code": item.item_code,
+				"name": item.item_name,
+				"price": float(price_map.get(item.item_code) or 0),
+				"uom": item.stock_uom,
+				"available_qty": available_qty,
+			}
+		)
+	return extras
 
 
 GIFT_MODE = "Gift Card"  # Mode of Payment used to tender a redeemed gift card
@@ -242,14 +340,25 @@ def create_opening_shift(pos_profile, company, balances):
 	existing = _open_shift()
 	if existing:
 		return existing
+	profile = _resolve_pos_profile(pos_profile)
+	if company != profile.company:
+		frappe.throw(_("Company must match POS Profile {0}.").format(profile.name))
+	allowed_modes = {row.mode_of_payment for row in profile.payments}
+	for balance in balances:
+		if balance.get("mode_of_payment") not in allowed_modes:
+			frappe.throw(
+				_("Payment method {0} is not allowed by POS Profile {1}.").format(
+					balance.get("mode_of_payment"), profile.name
+				)
+			)
 	doc = frappe.get_doc(
 		{
 			"doctype": "POS Opening Entry",
 			"period_start_date": frappe.utils.now_datetime(),
 			"posting_date": frappe.utils.getdate(),
 			"user": frappe.session.user,
-			"pos_profile": pos_profile,
-			"company": company,
+			"pos_profile": profile.name,
+			"company": profile.company,
 			"balance_details": [
 				{"mode_of_payment": b["mode_of_payment"], "opening_amount": flt(b.get("opening_amount"))}
 				for b in balances
@@ -263,8 +372,31 @@ def create_opening_shift(pos_profile, company, balances):
 
 def _resolve_customer(profile):
 	"""POS Profile customer, else a Walk-In Customer (created once if missing)."""
+	allowed_groups = _expanded_groups(
+		"Customer Group", [row.customer_group for row in (profile.customer_groups or [])]
+	)
 	if profile.customer:
+		customer_group = frappe.db.get_value("Customer", profile.customer, "customer_group")
+		if allowed_groups and customer_group not in allowed_groups:
+			frappe.throw(
+				_("Default customer {0} is outside the customer groups allowed by POS Profile {1}.").format(
+					profile.customer, profile.name
+				)
+			)
 		return profile.customer
+
+	if allowed_groups:
+		customer = frappe.get_all(
+			"Customer",
+			filters={"disabled": 0, "customer_group": ["in", allowed_groups]},
+			order_by="customer_name asc",
+			limit=1,
+			pluck="name",
+		)
+		if customer:
+			return customer[0]
+		frappe.throw(_("No enabled customer exists in the customer groups allowed by POS Profile {0}.").format(profile.name))
+
 	name = "Walk-In Customer"
 	if not frappe.db.exists("Customer", name):
 		frappe.get_doc(
@@ -280,9 +412,14 @@ def _resolve_customer(profile):
 
 
 def _order_result(si, idempotent=False, gift_applied=0.0):
+	payable_total = flt(si.rounded_total) or flt(si.grand_total)
 	return {
 		"name": si.name,
+		"net_total": float(si.net_total or 0),
+		"taxes": float(si.total_taxes_and_charges or 0),
 		"grand_total": float(si.grand_total or 0),
+		"rounded_total": float(si.rounded_total or si.grand_total or 0),
+		"payable_total": float(payable_total),
 		"paid_amount": float(si.paid_amount or 0),
 		"change_amount": float(si.change_amount or 0),
 		"gift_applied": float(gift_applied or 0),
@@ -291,11 +428,69 @@ def _order_result(si, idempotent=False, gift_applied=0.0):
 
 
 @frappe.whitelist()
+def preview_order(cart, discount=0, pos_profile=None):
+	"""Calculate the cart with the active profile without writing a document.
+
+	This keeps taxes, pricing rules, discount basis, and rounded totals shown in
+	the custom UI aligned with the Sales Invoice that checkout will submit.
+	"""
+	_require_login()
+	if isinstance(cart, str):
+		cart = json.loads(cart)
+
+	p = _resolve_pos_profile(pos_profile)
+	si = frappe.new_doc("Sales Invoice")
+	si.is_pos = 1
+	si.update_stock = cint(p.update_stock)
+	si.pos_profile = p.name
+	si.company = p.company
+	si.customer = _resolve_customer(p)
+	si.selling_price_list = p.selling_price_list
+	si.currency = p.currency
+	if p.warehouse:
+		si.set_warehouse = p.warehouse
+
+	for line in cart:
+		code = line.get("item_code") or line.get("id")
+		qty = flt(line.get("qty") or 1)
+		client_rate = line.get("rate")
+		if not code or qty <= 0 or not frappe.db.exists("Item", code):
+			frappe.throw(_("Invalid cart line."))
+		if client_rate is not None and not p.allow_rate_change:
+			frappe.throw(_("Rate changes are not allowed by POS Profile {0}.").format(p.name))
+		if p.update_stock and p.validate_stock_on_save:
+			_stock_rows(code, p.warehouse, qty)
+		row = {"item_code": code, "qty": qty}
+		if client_rate is not None:
+			row.update({"rate": flt(client_rate), "price_list_rate": flt(client_rate)})
+		si.append("items", row)
+
+	disc = flt(discount)
+	if disc > 0:
+		if not p.allow_discount_change:
+			frappe.throw(_("Discount changes are not allowed by POS Profile {0}.").format(p.name))
+		si.apply_discount_on = p.apply_discount_on or "Grand Total"
+		si.discount_amount = disc
+
+	si.flags.ignore_permissions = True
+	si.set_missing_values()
+	si.calculate_taxes_and_totals()
+	return {
+		"net_total": float(si.net_total or 0),
+		"taxes": float(si.total_taxes_and_charges or 0),
+		"grand_total": float(si.grand_total or 0),
+		"rounded_total": float(si.rounded_total or si.grand_total or 0),
+	}
+
+
+@frappe.whitelist()
 def submit_order(cart, payments, discount=0, pos_profile=None, request_id=None, table=None, gift_card=None):
-	"""Build + submit a POS Sales Invoice server-side (posawesome pattern). Server
-	prices from the profile price list — no client rate is trusted. Phase 1 handles
-	base items only; item add-ons and gift cards are Phase 2 (the frontend blocks
-	checkout when either is present so shown total always equals submitted total)."""
+	"""Build and submit a POS Sales Invoice using the active POS Profile.
+
+	Client rates and discounts are accepted only when their corresponding profile
+	permissions are enabled; all other pricing and accounting defaults are server
+	derived.
+	"""
 	_require_login()
 	if isinstance(cart, str):
 		cart = json.loads(cart)
@@ -315,7 +510,7 @@ def submit_order(cart, payments, discount=0, pos_profile=None, request_id=None, 
 	p = _resolve_pos_profile(pos_profile or shift.get("pos_profile"))
 	si = frappe.new_doc("Sales Invoice")
 	si.is_pos = 1
-	si.update_stock = 1
+	si.update_stock = cint(p.update_stock)
 	si.pos_profile = p.name
 	si.company = p.company
 	si.customer = _resolve_customer(p)
@@ -328,21 +523,47 @@ def submit_order(cart, payments, discount=0, pos_profile=None, request_id=None, 
 	if table:
 		si.po_no = table  # ponytail: stash dine-in table on po_no until a real field exists
 
+	for fieldname in (
+		"account_for_change_amount",
+		"apply_discount_on",
+		"campaign",
+		"company_address",
+		"cost_center",
+		"disable_rounded_total",
+		"ignore_pricing_rule",
+		"letter_head",
+		"project",
+		"select_print_heading",
+		"tax_category",
+		"taxes_and_charges",
+		"tc_name",
+		"write_off_account",
+		"write_off_cost_center",
+	):
+		if si.meta.has_field(fieldname):
+			si.set(fieldname, p.get(fieldname))
+
 	# Base items + flattened add-on lines both arrive here as {item_code, qty}. Never
 	# skip a non-empty code: a bad code must FAIL the order, not silently drop a paid
 	# line (that would undercharge vs what the customer was shown).
 	for line in cart:
 		code = line.get("item_code") or line.get("id")
 		qty = flt(line.get("qty") or 1)
+		client_rate = line.get("rate")
 		if not code or qty <= 0:
 			frappe.throw(_("Invalid cart line."))
 		if not frappe.db.exists("Item", code):
 			frappe.throw(_("Unknown item: {0}").format(code))
+		if client_rate is not None and not p.allow_rate_change:
+			frappe.throw(_("Rate changes are not allowed by POS Profile {0}.").format(p.name))
 		# Batch-tracked FG (from the factory) must carry a batch. Reuse the manufacture
 		# FEFO allocator: one SI row per batch. Non-stock add-ons return a single
-		# (None, qty) row. No rate is passed — the server prices from the price list.
-		for batch_no, q in _stock_rows(code, p.warehouse, qty):
+		# (None, qty) row. A client rate is only present when the profile permits it.
+		stock_rows = _stock_rows(code, p.warehouse, qty) if p.update_stock else [(None, qty)]
+		for batch_no, q in stock_rows:
 			row = {"item_code": code, "qty": q}
+			if client_rate is not None:
+				row.update({"rate": flt(client_rate), "price_list_rate": flt(client_rate)})
 			if batch_no:
 				row.update({"use_serial_batch_fields": 1, "batch_no": batch_no, "warehouse": p.warehouse})
 			si.append("items", row)
@@ -351,7 +572,9 @@ def submit_order(cart, payments, discount=0, pos_profile=None, request_id=None, 
 
 	disc = flt(discount)
 	if disc > 0:
-		si.apply_discount_on = "Grand Total"
+		if not p.allow_discount_change:
+			frappe.throw(_("Discount changes are not allowed by POS Profile {0}.").format(p.name))
+		si.apply_discount_on = p.apply_discount_on or "Grand Total"
 		si.discount_amount = disc  # ERPNext's flat additional-discount field
 
 	si.flags.ignore_permissions = True
@@ -369,15 +592,33 @@ def submit_order(cart, payments, discount=0, pos_profile=None, request_id=None, 
 		)
 		if not gc:
 			frappe.throw(_("Invalid or inactive gift card."))
-		gift_applied = min(flt(gc.balance), flt(si.grand_total))
+		payable_total = flt(si.rounded_total) or flt(si.grand_total)
+		gift_applied = min(flt(gc.balance), payable_total)
 		if gift_applied > 0:
 			_ensure_gift_mode(si.company)
 			si.append("payments", {"mode_of_payment": GIFT_MODE, "amount": gift_applied})
 
-	remaining = flt(si.grand_total) - gift_applied
+	payable_total = flt(si.rounded_total) or flt(si.grand_total)
+	remaining = payable_total - gift_applied
 	if remaining > 0:
-		mode = payments[0]["mode_of_payment"] if payments else "Cash"
-		si.append("payments", {"mode_of_payment": mode, "amount": remaining})
+		allowed_modes = {row.mode_of_payment for row in p.payments}
+		default_mode = next((row.mode_of_payment for row in p.payments if row.default), None)
+		requested = payments or ([{"mode_of_payment": default_mode}] if default_mode else [])
+		if not requested:
+			frappe.throw(_("No payment method is configured in POS Profile {0}.").format(p.name))
+
+		amounts_supplied = any(row.get("amount") not in (None, "") for row in requested)
+		for index, payment in enumerate(requested):
+			mode = payment.get("mode_of_payment")
+			if mode not in allowed_modes:
+				frappe.throw(_("Payment method {0} is not allowed by POS Profile {1}.").format(mode, p.name))
+			amount = flt(payment.get("amount")) if amounts_supplied else (remaining if index == 0 else 0)
+			if amount > 0:
+				si.append("payments", {"mode_of_payment": mode, "amount": amount})
+
+		paid = sum(flt(row.amount) for row in si.payments)
+		if paid + 1e-9 < payable_total and not p.allow_partial_payment:
+			frappe.throw(_("Partial payment is not allowed by POS Profile {0}.").format(p.name))
 
 	si.insert(ignore_permissions=True)  # validate() recomputes paid/change from payments
 	si.submit()
@@ -660,6 +901,8 @@ def get_shift_summary():
 	shift = _open_shift()
 	if not shift:
 		frappe.throw(_("No open shift."))
+	profile = _resolve_pos_profile(shift.get("pos_profile"))
+	symbol = frappe.db.get_value("Currency", profile.currency, "symbol") or profile.currency
 	_opening, start, end, sales_total, count, recon = _shift_reconciliation(shift)
 	return {
 		"opening_entry": shift["name"],
@@ -668,6 +911,8 @@ def get_shift_summary():
 		"sales_total": sales_total,
 		"invoice_count": count,
 		"reconciliation": recon,
+		"currency": profile.currency,
+		"currency_symbol": symbol,
 	}
 
 

@@ -1,12 +1,11 @@
 <script setup>
 import { ref, computed } from "vue"
-import { EXTRAS as STATIC_EXTRAS, NOTES, money } from "./data"
+import { NOTES } from "./data"
 import { pos } from "@/stores/pos"
 
-// Live add-on catalog (real Items, carry item_code) when loaded; static mock only
-// as a visual fallback — those ids are NOT real item_codes, so the register keeps
-// checkout blocked until a live catalog resolves them.
-const EXTRAS = computed(() => (pos.extras.length ? pos.extras : STATIC_EXTRAS))
+const EXTRAS = computed(() => pos.extras)
+const money = (value) =>
+  `${Number(value || 0).toFixed(2)} ${pos.config?.currency_symbol || pos.config?.currency || "د.ل"}`
 
 // One sheet, parameterized by title + the piece being edited. Used both for
 // "customize the whole line" (all pieces at once) and "customize piece N" —

@@ -3,7 +3,6 @@ import { ref, reactive, onMounted } from "vue"
 import { useRouter } from "vue-router"
 import { createOpeningShift } from "@/lib/api"
 import { pos, ensurePos, setShift } from "@/stores/pos"
-import { cur } from "@/lib/currency"
 import "./pos.css"
 
 const router = useRouter()
@@ -61,7 +60,7 @@ async function openShift() {
           <span class="text-sm font-bold text-gray-700 flex items-center gap-2"><i class="fa-solid fa-wallet text-pos-brand text-xs"></i> {{ p.mode_of_payment }}</span>
           <span class="flex items-center gap-1.5">
             <input v-model.number="opening[p.mode_of_payment]" type="number" min="0" dir="ltr" class="w-28 bg-pos-surface border border-pos-border rounded-lg px-2 py-1.5 text-sm font-bold text-gray-700 text-center focus:outline-none focus:border-pos-brand" />
-            <span class="text-xs text-pos-muted font-semibold">{{ cur }}</span>
+            <span class="text-xs text-pos-muted font-semibold">{{ pos.config?.currency_symbol || pos.config?.currency }}</span>
           </span>
         </label>
         <p v-if="!(pos.config?.payments || []).length" class="text-center text-pos-muted text-xs font-semibold py-4">لا توجد طرق دفع في ملف نقاط البيع</p>

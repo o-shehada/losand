@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue"
 import { stockStatus, BRANCH, ar } from "./data"
 import { getInventory } from "@/lib/api"
+import { pos } from "@/stores/pos"
 
 const search = ref("")
 const statusFilter = ref("all")
@@ -91,7 +92,7 @@ const filters = [
         </div>
       </div>
       <div class="pos-shift-pill text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-        <i class="fa-solid fa-sun text-yellow-200 text-xs"></i><span>وردية الصباح</span>
+        <i class="fa-solid fa-sun text-yellow-200 text-xs"></i><span>{{ pos.config?.pos_profile || "…" }}</span>
       </div>
       <button @click="showAdd = true" class="bg-pos-brand text-white text-xs font-extrabold px-4 py-2 rounded-xl min-h-[44px] flex items-center gap-2 hover:bg-pos-brand-dark transition-colors shadow-md shadow-pos-brand/25">
         <i class="fa-solid fa-plus text-sm"></i><span>إضافة صنف</span>

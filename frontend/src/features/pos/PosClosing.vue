@@ -2,8 +2,7 @@
 import { ref, reactive, onMounted } from "vue"
 import { useRouter } from "vue-router"
 import { getShiftSummary, closeShift } from "@/lib/api"
-import { setShift } from "@/stores/pos"
-import { money } from "./data"
+import { pos, setShift } from "@/stores/pos"
 import { ar } from "./data"
 import "./pos.css"
 
@@ -28,6 +27,8 @@ onMounted(async () => {
 })
 
 const diff = (r) => Number(counted[r.mode] || 0) - r.expected
+const money = (value) =>
+  `${Number(value || 0).toFixed(2)} ${summary.value?.currency_symbol || pos.config?.currency_symbol || "د.ل"}`
 
 async function close() {
   error.value = ""
