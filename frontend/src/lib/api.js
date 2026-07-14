@@ -87,8 +87,24 @@ export async function getInventory() {
   return call("losand.api.pos.get_inventory")
 }
 
+export async function getStocktakeItems() {
+  return call("losand.api.pos.get_stocktake_items")
+}
+
+export async function getWasteItems() {
+  return call("losand.api.pos.get_waste_items")
+}
+
+export async function getReceivingItems() {
+  return call("losand.api.pos.get_receiving_items")
+}
+
 export async function saveStocktake(counts) {
   return call("losand.api.pos.save_stocktake", { counts })
+}
+
+export async function saveWaste(items) {
+  return call("losand.api.pos.save_waste", { items })
 }
 
 export async function receiveGoods(payload) {
@@ -127,8 +143,8 @@ export async function editInvoice(invoice) {
   return call("losand.api.pos.edit_invoice", { invoice })
 }
 
-export async function deleteInvoice(invoice) {
-  return call("losand.api.pos.delete_invoice", { invoice })
+export async function cancelInvoice(invoice) {
+  return call("losand.api.pos.cancel_invoice", { invoice })
 }
 
 export async function login(username, password) {

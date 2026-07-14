@@ -508,7 +508,9 @@ def preview_order(cart, discount=0, pos_profile=None):
 
 
 @frappe.whitelist()
-def submit_order(cart, payments, discount=0, pos_profile=None, request_id=None, table=None, gift_card=None):
+def submit_order(
+	cart, payments, discount=0, pos_profile=None, request_id=None, table=None, gift_card=None, amended_from=None
+):
 	"""Build and submit a POS Sales Invoice using the active POS Profile.
 
 	Client rates and discounts are accepted only when their corresponding profile
@@ -546,6 +548,11 @@ def submit_order(cart, payments, discount=0, pos_profile=None, request_id=None, 
 		si.losand_pos_request_id = request_id
 	if table:
 		si.po_no = table  # ponytail: stash dine-in table on po_no until a real field exists
+	if amended_from:
+		# Re-key of an invoice the supervisor cancelled via edit_invoice. Frappe checks
+		# the source is really cancelled (Document.validate_amended_from) and names this
+		# one <original>-1, so don't re-validate here.
+		si.amended_from = amended_from
 
 	for fieldname in (
 		"account_for_change_amount",
@@ -666,14 +673,9 @@ def _inv_warehouse(warehouse=None):
 	return warehouse or cfg().source
 
 
-@frappe.whitelist()
-def get_inventory(warehouse=None):
-	"""Stock items in the store with their system qty — for the stocktake table and
-	the receiving item picker. `batched` items can be received but not yet counted."""
-	_require_login()
-	wh = _inv_warehouse(warehouse)
-	bins = {b.item_code: b.actual_qty for b in frappe.get_all("Bin", filters={"warehouse": wh}, fields=["item_code", "actual_qty"])}
-	codes = list(bins)
+def _item_rows(codes, wh):
+	"""Item codes → stocktake-shaped rows with their live qty in `wh`."""
+	stock = _stock_map(codes, wh) if codes else {}
 	items = (
 		frappe.get_all(
 			"Item",
@@ -684,21 +686,78 @@ def get_inventory(warehouse=None):
 		if codes
 		else []
 	)
-	return {
-		"warehouse": wh,
-		"items": [
-			{
-				"id": i.item_code,
-				"name": i.item_name,
-				"category": i.item_group,
-				"uom": i.stock_uom,
-				"system_qty": float(bins.get(i.item_code) or 0),
-				"warn": float(i.safety_stock or 0),  # reorder/low-stock threshold, if set
-				"batched": bool(i.has_batch_no),
-			}
-			for i in items
-		],
-	}
+	return [
+		{
+			"id": i.item_code,
+			"name": i.item_name,
+			"category": i.item_group,
+			"uom": i.stock_uom,
+			"system_qty": float((stock.get(i.item_code) or {}).get("qty") or 0),
+			"warn": float(i.safety_stock or 0),  # reorder/low-stock threshold, if set
+			"batched": bool(i.has_batch_no),
+		}
+		for i in items
+	]
+
+
+def _profile_items(profile, fieldname):
+	"""Item codes configured in one of the POS Profile pickers (see
+	losand/setup/pos_profile_fields.py). Empty = no restriction."""
+	return [row.item for row in (profile.get(fieldname) or []) if row.item]
+
+
+@frappe.whitelist()
+def get_inventory(warehouse=None):
+	"""Every stock item in the store with its system qty — the receiving item picker
+	needs the whole store, so this stays unfiltered. `batched` items can be received
+	but not yet counted. The stocktake screen uses get_stocktake_items() instead."""
+	_require_login()
+	wh = _inv_warehouse(warehouse)
+	codes = frappe.get_all("Bin", filters={"warehouse": wh}, pluck="item_code")
+	return {"warehouse": wh, "items": _item_rows(codes, wh)}
+
+
+@frappe.whitelist()
+def get_stocktake_items(pos_profile=None, warehouse=None):
+	"""Raw materials for the daily count — exactly the POS Profile's
+	`losand_stocktake_items`, nothing else. An EMPTY picker lists nothing: the count
+	sheet is opt-in per branch, so a profile that was never configured shows an empty
+	screen rather than every item in the store.
+
+	Configured items are listed even at zero stock, so the sheet stays stable shift
+	to shift."""
+	_require_login()
+	p = _resolve_pos_profile(pos_profile)
+	allowed = _profile_items(p, "losand_stocktake_items")
+	wh = _inv_warehouse(warehouse)
+	return {"warehouse": wh, "items": _item_rows(allowed, wh) if allowed else []}
+
+
+@frappe.whitelist()
+def get_receiving_items(pos_profile=None, warehouse=None):
+	"""Raw materials offered on the goods-receipt screen — exactly the POS Profile's
+	`losand_receiving_items`. An EMPTY picker lists nothing, same opt-in rule as
+	get_stocktake_items. Items are listed even at zero stock: receiving is how a
+	never-stocked item first arrives."""
+	_require_login()
+	p = _resolve_pos_profile(pos_profile)
+	allowed = _profile_items(p, "losand_receiving_items")
+	wh = _inv_warehouse(warehouse)
+	return {"warehouse": wh, "items": _item_rows(allowed, wh) if allowed else []}
+
+
+@frappe.whitelist()
+def get_waste_items(pos_profile=None):
+	"""Ready products that can be written off as هالك — exactly the POS Profile's
+	`losand_waste_items`, with live qty in the POS/FG warehouse (NOT the raw-material
+	store the stocktake counts). An EMPTY picker lists nothing, same opt-in rule as
+	get_stocktake_items."""
+	_require_login()
+	p = _resolve_pos_profile(pos_profile)
+	if not p.warehouse:
+		frappe.throw(_("POS Profile {0} has no warehouse.").format(p.name))
+	allowed = _profile_items(p, "losand_waste_items")
+	return {"warehouse": p.warehouse, "items": _item_rows(allowed, p.warehouse) if allowed else []}
 
 
 @frappe.whitelist()
@@ -773,6 +832,68 @@ def save_stocktake(counts, warehouse=None):
 		frappe.throw(_("No stock differences to post."))
 	frappe.db.commit()
 	return {"entries": entries, "counted": counted_n}
+
+
+@frappe.whitelist()
+def save_waste(items, pos_profile=None):
+	"""Write off READY items spoiled at the branch — a burnt burger, a spilled sauce.
+
+	Posts one Material Issue out of the POS/FG warehouse (where finished goods live),
+	FEFO across batches, valued against the Stock Adjustment account — the same
+	mechanism save_stocktake uses for a shortage, but the loss is declared up front
+	instead of inferred from a count.
+
+	Note: the stocktake above this counts the raw-material store; waste is a separate
+	warehouse, so the two never fight over the same qty.
+	"""
+	_require_login()
+	if isinstance(items, str):
+		items = json.loads(items)
+	p = _resolve_pos_profile(pos_profile)
+	wh = p.warehouse
+	if not wh:
+		frappe.throw(_("POS Profile {0} has no warehouse.").format(p.name))
+	company = frappe.db.get_value("Warehouse", wh, "company") or p.company
+	adj = cfg().clearing or frappe.db.get_value(
+		"Account", {"company": company, "account_type": "Stock Adjustment", "is_group": 0}, "name"
+	)
+
+	lines, reasons = [], []
+	for row in items:
+		code = row.get("item_code") or row.get("id")
+		qty = flt(row.get("qty"))
+		if not code or qty <= 0:  # 0 = nothing wasted, the table's default
+			continue
+		if not frappe.db.exists("Item", code):
+			frappe.throw(_("Unknown item: {0}").format(code))
+		lines.append((code, qty))
+		if row.get("reason"):
+			reasons.append(f"{row.get('item_name') or code}: {row['reason']}")
+	if not lines:
+		frappe.throw(_("No waste quantities entered."))
+
+	se = frappe.new_doc("Stock Entry")
+	se.stock_entry_type = "Material Issue"
+	se.company = company
+	se.from_warehouse = wh
+	# ponytail: reasons ride in `remarks` — Stock Entry Detail has no per-row reason
+	# field, and one free-text line is enough to answer "why" on the audit trail.
+	if reasons:
+		se.remarks = "هالك — " + "، ".join(reasons)
+	else:
+		se.remarks = "هالك"
+	for code, qty in lines:
+		# Throws "Not enough batch stock ..." when the branch never had that much.
+		for batch_no, q in _stock_rows(code, wh, qty):
+			row = {"item_code": code, "qty": q, "s_warehouse": wh, "expense_account": adj}
+			if batch_no:
+				row.update({"use_serial_batch_fields": 1, "batch_no": batch_no})
+			se.append("items", row)
+	se.flags.ignore_permissions = True
+	se.insert(ignore_permissions=True)
+	se.submit()
+	frappe.db.commit()
+	return {"entry": se.name, "items": len(lines)}
 
 
 @frappe.whitelist()
@@ -1006,7 +1127,9 @@ def get_shift_invoices():
 			"pos_profile": opening.pos_profile,
 			"owner": frappe.session.user,
 			"creation": ["between", [opening.period_start_date, frappe.utils.now_datetime()]],
-			"docstatus": ["!=", 2],
+			# Cancelled invoices stay in the list (badged "ملغاة", read-only) — voiding is
+			# not deleting, and the cashier should still see what was voided this shift.
+			"docstatus": ["in", [1, 2]],
 		},
 		fields=["name", "customer", "grand_total", "paid_amount", "posting_date", "po_no", "docstatus", "is_return"],
 		order_by="creation desc",
@@ -1058,19 +1181,25 @@ def edit_invoice(invoice):
 	doc.flags.ignore_permissions = True
 	doc.cancel()
 	frappe.db.commit()
-	return {"cart": list(merged.values()), "table": table}
+	# The corrected order is submitted as an AMENDMENT of this now-cancelled invoice
+	# (submit_order's `amended_from`), so ERPNext names it <original>-1 and the audit
+	# trail links the two instead of leaving an orphan pair.
+	return {"cart": list(merged.values()), "table": table, "amended_from": doc.name}
 
 
 @frappe.whitelist()
-def delete_invoice(invoice):
-	"""Cancel (if submitted) and permanently delete an invoice — fully unwinds the
-	transaction rather than leaving an audit trail. Supervisor-only, irreversible."""
+def cancel_invoice(invoice):
+	"""Void an invoice: cancel it, reversing its stock and GL impact but LEAVING the
+	record. Supervisor-only.
+
+	Deliberately never deletes — a submitted invoice is an accounting document, and
+	the cancelled docstatus is the audit trail of what was voided and by whom."""
 	_require_login()
 	_require_pos_manager()
 	doc = frappe.get_doc("Sales Invoice", invoice)
-	if doc.docstatus == 1:
-		doc.flags.ignore_permissions = True
-		doc.cancel()
-	frappe.delete_doc("Sales Invoice", invoice, ignore_permissions=True, force=True)
+	if doc.docstatus != 1:
+		frappe.throw(_("Only a submitted invoice can be cancelled."))
+	doc.flags.ignore_permissions = True
+	doc.cancel()
 	frappe.db.commit()
 	return {"name": invoice}

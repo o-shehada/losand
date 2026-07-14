@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "creation": "2026-07-14 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item",
+  "item_name"
+ ],
+ "fields": [
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "label": "Raw Material",
+   "options": "Item",
+   "in_list_view": 1,
+   "columns": 4,
+   "reqd": 1,
+   "link_filters": "[[\"Item\",\"is_raw_material\",\"=\",1],[\"Item\",\"is_stock_item\",\"=\",1],[\"Item\",\"disabled\",\"=\",0]]"
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "fetch_from": "item.item_name",
+   "in_list_view": 1,
+   "columns": 6,
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-14 00:00:00",
+ "module": "Los Andalus App",
+ "name": "Los Andalus POS Stocktake Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

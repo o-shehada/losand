@@ -1,7 +1,7 @@
 <script setup>
-import { ref, onMounted } from "vue"
+import { ref, computed, onMounted } from "vue"
 import { useRouter } from "vue-router"
-import { getShiftInvoices, returnInvoice, editInvoice, deleteInvoice } from "@/lib/api"
+import { getShiftInvoices, returnInvoice, editInvoice, cancelInvoice } from "@/lib/api"
 import { pos } from "@/stores/pos"
 import { setPendingEdit } from "@/stores/pendingEdit"
 
@@ -12,6 +12,35 @@ const loadError = ref("")
 const busy = ref("") // invoice name currently being acted on
 const actionError = ref("")
 const confirming = ref(null) // { invoice, action } awaiting a second tap
+
+// Search + filter run client-side: get_shift_invoices already returns only the
+// current shift's invoices, so the list is small and a server round-trip per
+// keystroke would buy nothing.
+const search = ref("")
+const statusFilter = ref("all")
+const STATUS_FILTERS = [
+  { key: "all", label: "الكل" },
+  { key: "sales", label: "مبيعات" },
+  { key: "returns", label: "مرتجعات" },
+  { key: "cancelled", label: "ملغاة" },
+]
+// docstatus 1 = submitted (live), 2 = cancelled/voided.
+const matchesStatus = (inv, key) =>
+  ({
+    all: true,
+    sales: inv.docstatus === 1 && !inv.is_return,
+    returns: inv.docstatus === 1 && !!inv.is_return,
+    cancelled: inv.docstatus === 2,
+  })[key]
+const visibleInvoices = computed(() => {
+  const term = search.value.trim().toLocaleLowerCase()
+  return invoices.value.filter((inv) => {
+    if (!matchesStatus(inv, statusFilter.value)) return false
+    if (!term) return true
+    // Invoice no. (incl. the "-1" amendment suffix), customer, or table.
+    return [inv.name, inv.customer, inv.po_no].some((field) => (field || "").toLocaleLowerCase().includes(term))
+  })
+})
 
 const isManager = () => !!pos.config?.is_pos_manager
 const formatMoney = (value) =>
@@ -40,7 +69,7 @@ function printInvoice(name) {
   window.open(`/printview?${params.toString()}`, "_blank")
 }
 
-// Return/edit/delete reverse a submitted invoice's stock+GL impact — require an
+// Return/edit/cancel reverse a submitted invoice's stock+GL impact — require an
 // explicit second tap on the same row instead of a native confirm() dialog.
 function askConfirm(invoice, action) {
   confirming.value = { invoice, action }
@@ -68,7 +97,7 @@ async function doEdit(invoice) {
   actionError.value = ""
   try {
     const res = await editInvoice(invoice)
-    setPendingEdit(res.cart, res.table)
+    setPendingEdit(res.cart, res.table, res.amended_from)
     router.push("/")
   } catch (e) {
     actionError.value = e.message
@@ -76,11 +105,11 @@ async function doEdit(invoice) {
   }
 }
 
-async function doDelete(invoice) {
+async function doCancel(invoice) {
   busy.value = invoice
   actionError.value = ""
   try {
-    await deleteInvoice(invoice)
+    await cancelInvoice(invoice)
     confirming.value = null
     await load()
   } catch (e) {
@@ -127,8 +156,44 @@ async function doDelete(invoice) {
         <i class="fa-solid fa-triangle-exclamation ml-2"></i>{{ actionError }}
       </p>
 
+      <!-- Search + status filter -->
+      <div class="flex items-center gap-2 flex-wrap mb-1">
+        <div class="relative flex-1 min-w-[180px]">
+          <input
+            v-model="search"
+            type="text"
+            placeholder="بحث برقم الفاتورة أو العميل أو الطاولة..."
+            class="w-full bg-pos-surface border border-pos-border rounded-xl pr-4 pl-9 py-2 text-sm focus:outline-none focus:border-pos-brand text-gray-700 min-h-[44px]"
+          />
+          <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-pos-muted text-sm"></i>
+          <button
+            v-if="search"
+            @click="search = ''"
+            class="absolute left-8 top-1/2 -translate-y-1/2 text-pos-muted hover:text-pos-danger transition-colors"
+          >
+            <i class="fa-solid fa-xmark text-xs"></i>
+          </button>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button
+            v-for="f in STATUS_FILTERS"
+            :key="f.key"
+            @click="statusFilter = f.key"
+            class="text-xs font-bold px-3 py-2 rounded-xl min-h-[44px] border transition-colors"
+            :class="statusFilter === f.key ? 'bg-pos-brand text-white border-pos-brand shadow-sm shadow-pos-brand/30' : 'bg-pos-surface border-pos-border text-gray-600 hover:border-pos-brand hover:text-pos-brand'"
+          >
+            {{ f.label }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="!visibleInvoices.length" class="text-center text-pos-muted py-16 font-semibold">
+        <i class="fa-solid fa-magnifying-glass-minus text-2xl mb-2 block opacity-60"></i>
+        لا توجد فواتير مطابقة
+      </div>
+
       <div
-        v-for="inv in invoices"
+        v-for="inv in visibleInvoices"
         :key="inv.name"
         class="bg-pos-surface rounded-xl2 border border-pos-border shadow-sm px-4 py-3 flex items-center justify-between gap-3 flex-wrap"
       >
@@ -150,7 +215,7 @@ async function doDelete(invoice) {
           <div v-if="confirming?.invoice === inv.name" class="flex items-center gap-1.5">
             <span class="text-[11px] font-bold text-pos-danger">تأكيد؟</span>
             <button
-              @click="confirming.action === 'return' ? doReturn(inv.name) : doDelete(inv.name)"
+              @click="confirming.action === 'return' ? doReturn(inv.name) : doCancel(inv.name)"
               :disabled="busy === inv.name"
               class="bg-pos-danger text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg hover:bg-pos-danger/90 disabled:opacity-40"
             >
@@ -183,11 +248,11 @@ async function doDelete(invoice) {
                 <i class="fa-solid" :class="busy === inv.name ? 'fa-spinner fa-spin' : 'fa-pen'"></i>
               </button>
               <button
-                @click="askConfirm(inv.name, 'delete')"
-                title="حذف"
+                @click="askConfirm(inv.name, 'cancel')"
+                title="إلغاء الفاتورة"
                 class="w-8 h-8 rounded-lg border border-pos-danger/30 bg-pos-danger-light text-pos-danger hover:bg-pos-danger hover:text-white transition-colors flex items-center justify-center"
               >
-                <i class="fa-solid fa-trash text-xs"></i>
+                <i class="fa-solid fa-ban text-xs"></i>
               </button>
             </template>
           </div>

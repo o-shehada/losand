@@ -105,6 +105,7 @@ website_route_rules = [
 # screenshots as Files first, then create/update the Wiki Pages that embed them.
 after_migrate = [
 	"losand.setup.arabic_translations.run",
+	"losand.setup.pos_profile_fields.run",
 	"losand.setup.upload_wiki_images.run",
 	"losand.setup.publish_manufacturing_wiki.run",
 	"losand.setup.publish_print_formats.run",

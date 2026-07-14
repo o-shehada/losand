@@ -22,6 +22,9 @@ const search = ref("")
 const cart = ref([])
 const discount = ref(0)
 const tableLabel = ref("الطاولة الخامسة")
+// Set when the register was loaded from PosHistory's "edit" (which cancels the
+// original): the invoice this checkout amends. Cleared once it's been submitted.
+const amendedFrom = ref(null)
 
 // Arabic weekday/month names, Western digits (matches the rest of the UI — see ar() in data.js).
 const today = new Intl.DateTimeFormat("ar", {
@@ -55,6 +58,7 @@ onMounted(async () => {
       pieces: Array.from({ length: Math.max(1, Math.round(line.qty)) }, () => emptyPiece()),
     }))
     if (edit.table) tableLabel.value = edit.table
+    amendedFrom.value = edit.amendedFrom || null
   }
   try {
     const res = await getPosProducts()
@@ -143,6 +147,7 @@ function remove(line) {
 function clearCart() {
   cart.value = []
   discount.value = 0
+  amendedFrom.value = null // the amend link belongs to this cart only
   gift.card = null
   gift.open = false
   gift.id = ""
@@ -373,6 +378,7 @@ async function checkout() {
       discount: Number(discount.value || 0),
       gift_card: gift.card?.id || null,
       table: tableLabel.value,
+      amended_from: amendedFrom.value,
       request_id: crypto.randomUUID(),
     })
     receipt.value = res
@@ -418,8 +424,12 @@ function kitchenTicketUrl(name) {
   return `/printview?${params.toString()}`
 }
 
+// Re-print, then land back on an empty register — printing means the cashier is
+// done with this order. window.open stays synchronous inside the click handler
+// (a pop-up opened after an async gap gets blocked).
 function printReceipt(name) {
   window.open(receiptUrl(name), "_blank")
+  dismissReceipt()
 }
 
 function dismissReceipt() {
@@ -439,6 +449,7 @@ async function loadHeld() {
 function resetOrder() {
   cart.value = []
   discount.value = 0
+  amendedFrom.value = null // parking drops the amend link — snapshot() doesn't carry it
   gift.card = null
   gift.open = false
   gift.id = ""

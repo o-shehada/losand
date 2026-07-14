@@ -10,7 +10,7 @@ import PosShell from "@/features/pos/PosShell.vue"
 import PosOpening from "@/features/pos/PosOpening.vue"
 import PosClosing from "@/features/pos/PosClosing.vue"
 import PosRegister from "@/features/pos/PosRegister.vue"
-import PosOrders from "@/features/pos/PosOrders.vue"
+// import PosOrders from "@/features/pos/PosOrders.vue" // hidden — see posRoutes
 import PosHistory from "@/features/pos/PosHistory.vue"
 import PosInventory from "@/features/pos/PosInventory.vue"
 import PosStocktake from "@/features/pos/PosStocktake.vue"
@@ -44,7 +44,9 @@ const posRoutes = [
     children: [
       { path: "", name: "pos-register", component: PosRegister },
       { path: "history", name: "pos-history", component: PosHistory },
-      { path: "orders", name: "pos-orders", component: PosOrders },
+      // ponytail: orders board hidden for now — still mock data (ORDERS in data.js),
+      // not wired to real invoices. Restore this route + the PosShell nav item together.
+      { path: "orders", redirect: "/" },
       { path: "inventory", name: "pos-inventory", component: PosInventory },
       { path: "stocktake", name: "pos-stocktake", component: PosStocktake },
       { path: "receiving", name: "pos-receiving", component: PosReceiving },

@@ -9,7 +9,7 @@ const router = useRouter()
 const navItems = [
   { name: "pos-register", to: "/", icon: "fa-cash-register", label: "نقاط البيع" },
   { name: "pos-history", to: "/history", icon: "fa-file-invoice", label: "الفواتير" },
-  { name: "pos-orders", to: "/orders", icon: "fa-receipt", label: "الطلبات" },
+  // { name: "pos-orders", to: "/orders", icon: "fa-receipt", label: "الطلبات" }, // hidden — see router.js
   { name: "pos-inventory", to: "/inventory", icon: "fa-boxes-stacked", label: "المخزون" },
   { name: "pos-stocktake", to: "/stocktake", icon: "fa-clipboard-check", label: "الجرد اليومي" },
   { name: "pos-receiving", to: "/receiving", icon: "fa-truck-ramp-box", label: "استلام الطلبات" },
