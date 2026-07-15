@@ -16,8 +16,7 @@
    "options": "Item",
    "in_list_view": 1,
    "columns": 4,
-   "reqd": 1,
-   "link_filters": "[[\"Item\",\"is_final_product\",\"=\",1],[\"Item\",\"is_stock_item\",\"=\",1],[\"Item\",\"disabled\",\"=\",0]]"
+   "reqd": 1
   },
   {
    "fieldname": "item_name",

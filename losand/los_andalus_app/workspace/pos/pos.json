@@ -1,7 +1,7 @@
 {
  "charts": [],
  "content": "[{\"id\":\"pos_header\",\"type\":\"header\",\"data\":{\"text\":\"Point of Sale\",\"col\":12}},{\"id\":\"pos_open\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Open POS Register\",\"col\":3}},{\"id\":\"pos_profiles\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Profiles\",\"col\":3}},{\"id\":\"pos_openings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Opening Entries\",\"col\":3}},{\"id\":\"pos_sales\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Sales Invoices\",\"col\":3}},{\"id\":\"pos_spacer\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"pos_operations\",\"type\":\"card\",\"data\":{\"card_name\":\"POS Operations\",\"col\":4}},{\"id\":\"pos_transactions\",\"type\":\"card\",\"data\":{\"card_name\":\"Transactions\",\"col\":4}},{\"id\":\"pos_catalog\",\"type\":\"card\",\"data\":{\"card_name\":\"Catalog and Customers\",\"col\":4}},{\"id\":\"pos_payments\",\"type\":\"card\",\"data\":{\"card_name\":\"Payments and Inventory\",\"col\":4}},{\"id\":\"pos_reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
- "creation": "2026-07-04 07:05:56.098615",
+ "creation": "2026-07-04 09:07:48.235647",
  "custom_blocks": [],
  "docstatus": 0,
  "doctype": "Workspace",
@@ -13,38 +13,299 @@
  "is_hidden": 0,
  "label": "POS",
  "links": [
-  {"hidden": 0, "is_query_report": 0, "label": "POS Operations", "link_count": 0, "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 0, "label": "POS Profile", "link_count": 0, "link_to": "POS Profile", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "POS Settings", "link_count": 0, "link_to": "POS Settings", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "POS Opening Entry", "link_count": 0, "link_to": "POS Opening Entry", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Los Andalus POS Closing", "link_count": 0, "link_to": "Los Andalus POS Closing", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "ERPNext POS Closing Entry", "link_count": 0, "link_to": "POS Closing Entry", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Transactions", "link_count": 0, "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 0, "label": "Sales Invoice", "link_count": 0, "link_to": "Sales Invoice", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "POS Invoice", "link_count": 0, "link_to": "POS Invoice", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "POS Invoice Merge Log", "link_count": 0, "link_to": "POS Invoice Merge Log", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Parked Orders", "link_count": 0, "link_to": "Los Andalus Parked Order", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Gift Cards", "link_count": 0, "link_to": "Los Andalus Gift Card", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Catalog and Customers", "link_count": 0, "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 0, "label": "Item", "link_count": 0, "link_to": "Item", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Item Group", "link_count": 0, "link_to": "Item Group", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Item Price", "link_count": 0, "link_to": "Item Price", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Price List", "link_count": 0, "link_to": "Price List", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Customer", "link_count": 0, "link_to": "Customer", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Customer Group", "link_count": 0, "link_to": "Customer Group", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Payments and Inventory", "link_count": 0, "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 0, "label": "Mode of Payment", "link_count": 0, "link_to": "Mode of Payment", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Warehouse", "link_count": 0, "link_to": "Warehouse", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Stock Entry", "link_count": 0, "link_to": "Stock Entry", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Stock Reconciliation", "link_count": 0, "link_to": "Stock Reconciliation", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Reports", "link_count": 0, "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 1, "label": "POS Register", "link_count": 0, "link_to": "POS Register", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Sales Register", "link_count": 0, "link_to": "Sales Register", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Item-wise Sales Register", "link_count": 0, "link_to": "Item-wise Sales Register", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Stock Balance", "link_count": 0, "link_to": "Stock Balance", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Stock Ledger", "link_count": 0, "link_to": "Stock Ledger", "link_type": "Report", "onboard": 0, "type": "Link"}
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "POS Operations",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "POS Profile",
+   "link_count": 0,
+   "link_to": "POS Profile",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "POS Settings",
+   "link_count": 0,
+   "link_to": "POS Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "POS Opening Entry",
+   "link_count": 0,
+   "link_to": "POS Opening Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Los Andalus POS Closing",
+   "link_count": 0,
+   "link_to": "Los Andalus POS Closing",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "ERPNext POS Closing Entry",
+   "link_count": 0,
+   "link_to": "POS Closing Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Transactions",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sales Invoice",
+   "link_count": 0,
+   "link_to": "Sales Invoice",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "POS Invoice",
+   "link_count": 0,
+   "link_to": "POS Invoice",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "POS Invoice Merge Log",
+   "link_count": 0,
+   "link_to": "POS Invoice Merge Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Parked Orders",
+   "link_count": 0,
+   "link_to": "Los Andalus Parked Order",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Gift Cards",
+   "link_count": 0,
+   "link_to": "Los Andalus Gift Card",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Catalog and Customers",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item",
+   "link_count": 0,
+   "link_to": "Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item Group",
+   "link_count": 0,
+   "link_to": "Item Group",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item Price",
+   "link_count": 0,
+   "link_to": "Item Price",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Price List",
+   "link_count": 0,
+   "link_to": "Price List",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Customer",
+   "link_count": 0,
+   "link_to": "Customer",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Customer Group",
+   "link_count": 0,
+   "link_to": "Customer Group",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Payments and Inventory",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mode of Payment",
+   "link_count": 0,
+   "link_to": "Mode of Payment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Warehouse",
+   "link_count": 0,
+   "link_to": "Warehouse",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock Entry",
+   "link_count": 0,
+   "link_to": "Stock Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock Reconciliation",
+   "link_count": 0,
+   "link_to": "Stock Reconciliation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "POS Register",
+   "link_count": 0,
+   "link_to": "POS Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Sales Register",
+   "link_count": 0,
+   "link_to": "Sales Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Item-wise Sales Register",
+   "link_count": 0,
+   "link_to": "Item-wise Sales Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Balance",
+   "link_count": 0,
+   "link_to": "Stock Balance",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Ledger",
+   "link_count": 0,
+   "link_to": "Stock Ledger",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  }
  ],
- "modified": "2026-07-04 08:00:00.000000",
+ "modified": "2026-07-04 08:00:00",
+ "modified_by": "Administrator",
  "module": "Los Andalus App",
  "name": "POS",
  "number_cards": [],
@@ -55,10 +316,33 @@
  "roles": [],
  "sequence_id": 27.0,
  "shortcuts": [
-  {"color": "Green", "label": "Open POS Register", "type": "URL", "url": "/los-andalus/pos/"},
-  {"color": "Blue", "doc_view": "List", "label": "POS Profiles", "link_to": "POS Profile", "type": "DocType"},
-  {"color": "Orange", "doc_view": "List", "label": "POS Opening Entries", "link_to": "POS Opening Entry", "type": "DocType"},
-  {"color": "Grey", "doc_view": "List", "label": "POS Sales Invoices", "link_to": "Sales Invoice", "type": "DocType"}
+  {
+   "color": "Green",
+   "label": "Open POS Register",
+   "type": "URL",
+   "url": "/los-andalus/pos/"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "POS Profiles",
+   "link_to": "POS Profile",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "label": "POS Opening Entries",
+   "link_to": "POS Opening Entry",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "POS Sales Invoices",
+   "link_to": "Sales Invoice",
+   "type": "DocType"
+  }
  ],
  "title": "POS"
 }

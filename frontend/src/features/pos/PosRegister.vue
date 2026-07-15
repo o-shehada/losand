@@ -21,7 +21,7 @@ const activeCat = ref("all")
 const search = ref("")
 const cart = ref([])
 const discount = ref(0)
-const tableLabel = ref("الطاولة الخامسة")
+const tableLabel = ref("")
 // Set when the register was loaded from PosHistory's "edit" (which cancels the
 // original): the invoice this checkout amends. Cleared once it's been submitted.
 const amendedFrom = ref(null)
@@ -348,20 +348,9 @@ function openPayment() {
 
 const checkingOut = ref(false)
 const checkoutError = ref("")
-const receipt = ref(null)
-
-// Auto-dismiss the success modal so the cashier lands back on an empty, ready
-// register without an extra click — still closable early (× / click-outside).
-const NEW_ORDER_DELAY_MS = 1800
-let newOrderTimer
 
 async function checkout() {
   if (!canPay.value || checkingOut.value) return
-  // Both print windows must open synchronously, inside this click handler and
-  // before any `await` — opening the second one after an async gap gets it
-  // blocked as a pop-up by the browser.
-  const receiptWindow = window.open("about:blank", "_blank")
-  const kitchenWindow = window.open("about:blank", "_blank")
   checkingOut.value = true
   checkoutError.value = ""
   try {
@@ -381,18 +370,11 @@ async function checkout() {
       amended_from: amendedFrom.value,
       request_id: crypto.randomUUID(),
     })
-    receipt.value = res
-    receiptWindow.location.href = receiptUrl(res.name)
-    kitchenWindow.location.href = kitchenTicketUrl(res.name)
+    printReceipt(receiptUrl(res.name))
+    printReceipt(kitchenTicketUrl(res.name))
     payOpen.value = false
     clearCart()
-    clearTimeout(newOrderTimer)
-    newOrderTimer = setTimeout(() => {
-      if (receipt.value?.name === res.name) receipt.value = null
-    }, NEW_ORDER_DELAY_MS)
   } catch (e) {
-    receiptWindow.close()
-    kitchenWindow.close()
     const stockMatch = e.message.match(/Not enough batch stock of (.+?) in .+? \(short ([\d.,]+)\)\.?/i)
     checkoutError.value = stockMatch
       ? `الكمية المتاحة من "${stockMatch[1]}" غير كافية لإتمام الطلب. النقص: ${stockMatch[2]}.`
@@ -424,17 +406,15 @@ function kitchenTicketUrl(name) {
   return `/printview?${params.toString()}`
 }
 
-// Re-print, then land back on an empty register — printing means the cashier is
-// done with this order. window.open stays synchronous inside the click handler
-// (a pop-up opened after an async gap gets blocked).
-function printReceipt(name) {
-  window.open(receiptUrl(name), "_blank")
-  dismissReceipt()
-}
-
-function dismissReceipt() {
-  clearTimeout(newOrderTimer)
-  receipt.value = null
+// Print via a hidden iframe instead of a new tab/window — the print format's
+// own trigger_print script calls window.print() on load, opening the browser's
+// print dialog for that iframe's content.
+function printReceipt(url) {
+  const iframe = document.createElement("iframe")
+  iframe.style.display = "none"
+  iframe.src = url
+  document.body.appendChild(iframe)
+  iframe.addEventListener("load", () => setTimeout(() => iframe.remove(), 2000))
 }
 
 // Paused / parked orders. Snapshot the whole order, clear the register for a
@@ -973,26 +953,6 @@ function sheetDone(res) {
           {{ checkingOut ? "جارٍ الإتمام…" : `تأكيد الدفع ${formatMoney(remaining)}` }}
         </button>
       </div>
-    </div>
-  </div>
-
-  <!-- Order completed -->
-  <div v-if="receipt" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" style="backdrop-filter: blur(4px)" @click.self="dismissReceipt()">
-    <div class="pos-modal bg-pos-surface rounded-xl2 shadow-2xl border border-pos-border p-8 flex flex-col items-center gap-4 max-w-sm w-full text-center">
-      <div class="w-16 h-16 bg-pos-green-light rounded-full flex items-center justify-center"><i class="fa-solid fa-circle-check text-pos-green text-3xl"></i></div>
-      <div>
-        <h3 class="font-extrabold text-gray-800 text-lg">تم إتمام الطلب!</h3>
-        <p class="text-sm text-pos-muted font-semibold mt-1">فاتورة #{{ receipt.name }}</p>
-      </div>
-      <div class="w-full bg-pos-canvas border border-pos-border rounded-xl px-4 py-3 flex flex-col gap-1.5">
-        <div class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold">الإجمالي</span><span class="font-extrabold text-gray-800">{{ formatMoney(receipt.grand_total) }}</span></div>
-        <div v-if="receipt.taxes" class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold">الضرائب والرسوم</span><span class="font-bold text-gray-700">{{ formatMoney(receipt.taxes) }}</span></div>
-        <div v-if="receipt.gift_applied" class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold flex items-center gap-1.5"><i class="fa-solid fa-gift text-xs text-pos-brand"></i> بطاقة هدية</span><span class="font-bold text-pos-brand-dark">−{{ formatMoney(receipt.gift_applied) }}</span></div>
-        <div class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold">المدفوع</span><span class="font-bold text-gray-700">{{ formatMoney(receipt.paid_amount) }}</span></div>
-        <div v-if="receipt.change_amount" class="flex items-center justify-between text-sm"><span class="text-pos-muted font-semibold">الباقي للعميل</span><span class="font-bold text-pos-brand-dark">{{ formatMoney(receipt.change_amount) }}</span></div>
-      </div>
-      <button @click="printReceipt(receipt.name)" class="bg-pos-canvas border border-pos-border text-pos-brand-dark font-extrabold text-sm px-8 py-2.5 rounded-xl min-h-[44px] hover:border-pos-brand transition-colors w-full"><i class="fa-solid fa-print ml-2"></i>طباعة الإيصال</button>
-      <button @click="dismissReceipt()" class="bg-pos-brand text-white font-extrabold text-sm px-8 py-2.5 rounded-xl min-h-[44px] hover:bg-pos-brand-dark transition-colors w-full">طلب جديد</button>
     </div>
   </div>
 </template>

@@ -48,7 +48,7 @@ def run():
 					"label": "Los Andalus — Item Lists",
 					"fieldtype": "Section Break",
 					"insert_after": "hide_unavailable_items",
-					"collapsible": 1,
+					"collapsible": 0,
 				},
 				{
 					"fieldname": STOCKTAKE_FIELD,

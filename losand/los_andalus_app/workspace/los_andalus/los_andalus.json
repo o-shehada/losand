@@ -1,60 +1,263 @@
 {
  "charts": [
-  {"chart_name": "LA Daily Production", "label": "Daily Production"},
-  {"chart_name": "LA Batches by Status", "label": "Batches by Status"}
+  {
+   "chart_name": "LA Daily Production",
+   "label": "LA Daily Production"
+  },
+  {
+   "chart_name": "LA Batches by Status",
+   "label": "LA Batches by Status"
+  }
  ],
  "content": "[{\"id\":\"h1\",\"type\":\"header\",\"data\":{\"text\":\"Los Andalus Manufacture\",\"col\":12}},{\"id\":\"n1\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA Batches Today\",\"col\":3}},{\"id\":\"n2\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA Total Produced\",\"col\":3}},{\"id\":\"n3\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA Production Cost\",\"col\":3}},{\"id\":\"n4\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA FG Stock Value\",\"col\":3}},{\"id\":\"ch1\",\"type\":\"chart\",\"data\":{\"chart_name\":\"LA Daily Production\",\"col\":8}},{\"id\":\"ch2\",\"type\":\"chart\",\"data\":{\"chart_name\":\"LA Batches by Status\",\"col\":4}},{\"id\":\"sp\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"s1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Batches\",\"col\":3}},{\"id\":\"s2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Workbenches\",\"col\":3}},{\"id\":\"s3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Items\",\"col\":3}},{\"id\":\"s4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Balance\",\"col\":3}},{\"id\":\"s5\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Open Production Portal\",\"col\":3}},{\"id\":\"sp2\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Production\",\"col\":4}},{\"id\":\"c2\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"c3\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}},{\"id\":\"c4\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
- "creation": "2026-06-13 00:00:00",
+ "creation": "2026-06-21 18:36:13.000244",
  "custom_blocks": [],
  "docstatus": 0,
  "doctype": "Workspace",
  "for_user": "",
  "hide_custom": 0,
- "icon": "manufacturing",
+ "icon": "retail",
  "idx": 0,
+ "indicator_color": "",
  "is_hidden": 0,
  "label": "Los Andalus",
  "links": [
-  {"hidden": 0, "is_query_report": 0, "label": "Production", "link_count": 0, "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 0, "label": "Production Batch", "link_count": 0, "link_to": "Los Andalus Production Batch", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Stock Entry", "link_count": 0, "link_to": "Stock Entry", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Stock", "link_count": 0, "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 0, "label": "Item", "link_count": 0, "link_to": "Item", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Batch", "link_count": 0, "link_to": "Batch", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Warehouse", "link_count": 0, "link_to": "Warehouse", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Stock Reconciliation", "link_count": 0, "link_to": "Stock Reconciliation", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Setup", "link_count": 0, "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 0, "label": "Workbench", "link_count": 0, "link_to": "Workbench", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Product Category", "link_count": 0, "link_to": "Product Category", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Shift", "link_count": 0, "link_to": "Shift", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Manufacture Settings", "link_count": 0, "link_to": "Los Andalus Manufacture Settings", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Item Group", "link_count": 0, "link_to": "Item Group", "link_type": "DocType", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 0, "label": "Reports", "link_count": 0, "onboard": 0, "type": "Card Break"},
-  {"hidden": 0, "is_query_report": 1, "label": "Stock Balance", "link_count": 0, "link_to": "Stock Balance", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Stock Ledger", "link_count": 0, "link_to": "Stock Ledger", "link_type": "Report", "onboard": 0, "type": "Link"},
-  {"hidden": 0, "is_query_report": 1, "label": "Batch-Wise Balance History", "link_count": 0, "link_to": "Batch-Wise Balance History", "link_type": "Report", "onboard": 0, "type": "Link"}
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Production",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Production Batch",
+   "link_count": 0,
+   "link_to": "Los Andalus Production Batch",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock Entry",
+   "link_count": 0,
+   "link_to": "Stock Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item",
+   "link_count": 0,
+   "link_to": "Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Batch",
+   "link_count": 0,
+   "link_to": "Batch",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Warehouse",
+   "link_count": 0,
+   "link_to": "Warehouse",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock Reconciliation",
+   "link_count": 0,
+   "link_to": "Stock Reconciliation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Setup",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Workbench",
+   "link_count": 0,
+   "link_to": "Workbench",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Product Category",
+   "link_count": 0,
+   "link_to": "Product Category",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Shift",
+   "link_count": 0,
+   "link_to": "Shift",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Manufacture Settings",
+   "link_count": 0,
+   "link_to": "Los Andalus Manufacture Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item Group",
+   "link_count": 0,
+   "link_to": "Item Group",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Balance",
+   "link_count": 0,
+   "link_to": "Stock Balance",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Ledger",
+   "link_count": 0,
+   "link_to": "Stock Ledger",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Batch-Wise Balance History",
+   "link_count": 0,
+   "link_to": "Batch-Wise Balance History",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  }
  ],
- "modified": "2026-06-16 21:35:00",
+ "modified": "2026-07-04 06:52:40.305969",
+ "modified_by": "Administrator",
  "module": "Los Andalus App",
  "name": "Los Andalus",
  "number_cards": [
-  {"number_card_name": "LA Batches Today", "label": "Batches Today"},
-  {"number_card_name": "LA Total Produced", "label": "Total Produced (pcs)"},
-  {"number_card_name": "LA Production Cost", "label": "Production Cost (Completed)"},
-  {"number_card_name": "LA FG Stock Value", "label": "FG Stock Value"}
+  {
+   "label": "LA Batches Today",
+   "number_card_name": "LA Batches Today"
+  },
+  {
+   "label": "LA Total Produced",
+   "number_card_name": "LA Total Produced"
+  },
+  {
+   "label": "LA Production Cost",
+   "number_card_name": "LA Production Cost"
+  },
+  {
+   "label": "LA FG Stock Value",
+   "number_card_name": "LA FG Stock Value"
+  }
  ],
  "owner": "Administrator",
  "parent_page": "",
  "public": 1,
  "quick_lists": [],
  "roles": [],
- "sequence_id": 20.0,
+ "sequence_id": 1.0,
  "shortcuts": [
-  {"color": "Green", "doc_view": "List", "label": "Production Batches", "link_to": "Los Andalus Production Batch", "type": "DocType"},
-  {"color": "Orange", "doc_view": "List", "label": "Workbenches", "link_to": "Workbench", "type": "DocType"},
-  {"color": "Grey", "doc_view": "List", "label": "Items", "link_to": "Item", "type": "DocType"},
-  {"color": "Blue", "label": "Stock Balance", "link_to": "Stock Balance", "type": "Report"},
-  {"color": "Cyan", "label": "Open Production Portal", "type": "URL", "url": "/los-andalus/manufacture/"}
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "Production Batches",
+   "link_to": "Los Andalus Production Batch",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "label": "Workbenches",
+   "link_to": "Workbench",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Items",
+   "link_to": "Item",
+   "type": "DocType"
+  },
+  {
+   "color": "Blue",
+   "label": "Stock Balance",
+   "link_to": "Stock Balance",
+   "report_ref_doctype": "Stock Ledger Entry",
+   "type": "Report"
+  },
+  {
+   "color": "Cyan",
+   "label": "Open Production Portal",
+   "type": "URL",
+   "url": "/los-andalus/manufacture/"
+  }
  ],
  "title": "Los Andalus"
 }
