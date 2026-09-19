@@ -65,6 +65,17 @@ def _resolve_pos_profile(name=None):
 	frappe.throw(_("No POS Profile is configured. Create one in ERPNext first."))
 
 
+def _stamp_branch(doc, profile):
+	"""Tag the document with the profile's Branch accounting dimension, so revenue
+	(Sales Invoice) and stock movement (Stock Entry) are attributable to one branch —
+	in our reports and in ERPNext's dimension-aware ones. No branch configured, or a
+	doctype the dimension was not installed on: leave it alone."""
+	branch = profile.get("losand_branch")
+	if branch and doc.meta.has_field("branch") and not doc.get("branch"):
+		doc.branch = branch
+	return doc
+
+
 def _expanded_groups(doctype, configured):
 	"""Expand configured tree nodes to include descendants."""
 	if not configured:
@@ -207,12 +218,15 @@ def get_products(pos_profile=None, item_group=None, search=None):
 		):
 			price_map.setdefault(pr.item_code, pr.price_list_rate)
 
-	stock = _stock_map(codes, warehouse) if warehouse else {}
+	# A profile with update_stock=0 sells without touching the ledger: there is no stock
+	# to read, and hide_unavailable_items would otherwise hide every item at zero qty.
+	track_stock = bool(p.update_stock)
+	stock = _stock_map(codes, warehouse) if warehouse and track_stock else {}
 
 	products = []
 	for i in items:
-		available_qty = float(stock.get(i.item_code, {}).get("qty") or 0)
-		if p.hide_unavailable_items and i.is_stock_item and available_qty <= 0:
+		available_qty = float(stock.get(i.item_code, {}).get("qty") or 0) if track_stock else None
+		if track_stock and p.hide_unavailable_items and i.is_stock_item and available_qty <= 0:
 			continue
 		products.append({
 			"id": i.item_code,
@@ -544,6 +558,7 @@ def submit_order(
 	si.currency = p.currency
 	if p.warehouse:
 		si.set_warehouse = p.warehouse
+	_stamp_branch(si, p)
 	if request_id:
 		si.losand_pos_request_id = request_id
 	if table:
@@ -667,10 +682,15 @@ def submit_order(
 # ---------------------------------------------------------------------------
 # Phase 3 — inventory ops: stocktake (Stock Reconciliation) + receiving (Stock Entry)
 # ---------------------------------------------------------------------------
-def _inv_warehouse(warehouse=None):
-	"""Inventory ops run on the ingredient store (raw materials), not the FG/POS
-	warehouse — you count and receive ingredients, you sell finished goods."""
-	return warehouse or cfg().source
+def _inv_warehouse(profile, warehouse=None):
+	"""Every POS inventory screen looks at the BRANCH warehouse on the POS Profile:
+	goods arrive there by transfer (استلام الطلبات) and leave it by the end-of-day
+	count (الجرد اليومي). The factory's own store (cfg().source) belongs to the
+	manufacture app, not to a branch."""
+	wh = warehouse or profile.warehouse
+	if not wh:
+		frappe.throw(_("POS Profile {0} has no warehouse.").format(profile.name))
+	return wh
 
 
 def _item_rows(codes, wh):
@@ -707,51 +727,31 @@ def _profile_items(profile, fieldname):
 
 
 @frappe.whitelist()
-def get_inventory(warehouse=None):
-	"""Every stock item in the store with its system qty — the receiving item picker
-	needs the whole store, so this stays unfiltered. `batched` items can be received
-	but not yet counted. The stocktake screen uses get_stocktake_items() instead."""
+def get_inventory(warehouse=None, pos_profile=None):
+	"""Everything the branch warehouse holds, with its system qty."""
 	_require_login()
-	wh = _inv_warehouse(warehouse)
+	wh = _inv_warehouse(_resolve_pos_profile(pos_profile), warehouse)
 	codes = frappe.get_all("Bin", filters={"warehouse": wh}, pluck="item_code")
 	return {"warehouse": wh, "items": _item_rows(codes, wh)}
 
 
 @frappe.whitelist()
 def get_stocktake_items(pos_profile=None, warehouse=None):
-	"""Raw materials for the daily count — exactly the POS Profile's
-	`losand_stocktake_items`, nothing else. An EMPTY picker lists nothing: the count
-	sheet is opt-in per branch, so a profile that was never configured shows an empty
-	screen rather than every item in the store.
-
-	Configured items are listed even at zero stock, so the sheet stays stable shift
-	to shift."""
+	"""The end-of-day count sheet: everything the branch warehouse holds, listed with
+	what the system still thinks is left. No picker to configure — a branch counts
+	what it has, and an item it never received simply has no Bin row here."""
 	_require_login()
 	p = _resolve_pos_profile(pos_profile)
-	allowed = _profile_items(p, "losand_stocktake_items")
-	wh = _inv_warehouse(warehouse)
-	return {"warehouse": wh, "items": _item_rows(allowed, wh) if allowed else []}
-
-
-@frappe.whitelist()
-def get_receiving_items(pos_profile=None, warehouse=None):
-	"""Raw materials offered on the goods-receipt screen — exactly the POS Profile's
-	`losand_receiving_items`. An EMPTY picker lists nothing, same opt-in rule as
-	get_stocktake_items. Items are listed even at zero stock: receiving is how a
-	never-stocked item first arrives."""
-	_require_login()
-	p = _resolve_pos_profile(pos_profile)
-	allowed = _profile_items(p, "losand_receiving_items")
-	wh = _inv_warehouse(warehouse)
-	return {"warehouse": wh, "items": _item_rows(allowed, wh) if allowed else []}
+	wh = _inv_warehouse(p, warehouse)
+	codes = frappe.get_all("Bin", filters={"warehouse": wh}, pluck="item_code")
+	return {"warehouse": wh, "items": _item_rows(codes, wh)}
 
 
 @frappe.whitelist()
 def get_waste_items(pos_profile=None):
 	"""Ready products that can be written off as هالك — exactly the POS Profile's
-	`losand_waste_items`, with live qty in the POS/FG warehouse (NOT the raw-material
-	store the stocktake counts). An EMPTY picker lists nothing, same opt-in rule as
-	get_stocktake_items."""
+	`losand_waste_items`. An EMPTY picker lists nothing: waste is opt-in per branch,
+	unlike the count sheet which lists whatever the warehouse holds."""
 	_require_login()
 	p = _resolve_pos_profile(pos_profile)
 	if not p.warehouse:
@@ -761,8 +761,9 @@ def get_waste_items(pos_profile=None):
 
 
 @frappe.whitelist()
-def save_stocktake(counts, warehouse=None):
-	"""End-of-shift count → adjust each counted item to its counted qty by posting the
+def save_stocktake(counts, warehouse=None, pos_profile=None):
+	"""End-of-day count of the branch warehouse → adjust each counted item to its
+	counted qty by posting the
 	DIFFERENCE: Material Issue (FEFO across batches) for shortages, Material Receipt
 	for surplus. Batch-capable — shortages consume existing batches, surplus lands in
 	a new one. Difference is valued against the Stock Adjustment account.
@@ -772,8 +773,9 @@ def save_stocktake(counts, warehouse=None):
 	_require_login()
 	if isinstance(counts, str):
 		counts = json.loads(counts)
-	wh = _inv_warehouse(warehouse)
-	company = frappe.db.get_value("Warehouse", wh, "company") or cfg().company
+	p = _resolve_pos_profile(pos_profile)
+	wh = _inv_warehouse(p, warehouse)
+	company = frappe.db.get_value("Warehouse", wh, "company") or p.company or cfg().company
 	adj = cfg().clearing or frappe.db.get_value(
 		"Account", {"company": company, "account_type": "Stock Adjustment", "is_group": 0}, "name"
 	)
@@ -800,6 +802,7 @@ def save_stocktake(counts, warehouse=None):
 		se.stock_entry_type = "Material Issue"
 		se.company = company
 		se.from_warehouse = wh
+		_stamp_branch(se, p)
 		for code, q in shortages:
 			for batch_no, qq in _stock_rows(code, wh, q):
 				row = {"item_code": code, "qty": qq, "s_warehouse": wh, "expense_account": adj}
@@ -815,6 +818,7 @@ def save_stocktake(counts, warehouse=None):
 		se.stock_entry_type = "Material Receipt"
 		se.company = company
 		se.to_warehouse = wh
+		_stamp_branch(se, p)
 		for code, q in surplus:
 			row = {"item_code": code, "qty": q, "t_warehouse": wh, "expense_account": adj}
 			rate = _last_receipt_rate(code, wh)
@@ -876,6 +880,7 @@ def save_waste(items, pos_profile=None):
 	se.stock_entry_type = "Material Issue"
 	se.company = company
 	se.from_warehouse = wh
+	_stamp_branch(se, p)
 	# ponytail: reasons ride in `remarks` — Stock Entry Detail has no per-row reason
 	# field, and one free-text line is enough to answer "why" on the audit trail.
 	if reasons:
@@ -896,42 +901,157 @@ def save_waste(items, pos_profile=None):
 	return {"entry": se.name, "items": len(lines)}
 
 
+# Receiving (استلام الطلبات) is an inbox of DRAFT Material Transfers already created
+# in the desk by whoever ships the goods: the branch confirms what actually arrived
+# and submitting the draft is what moves the stock. The branch is identified by the
+# POS Profile's warehouse — a transfer targeting it belongs to that branch.
+def _branch_warehouse(profile):
+	if not profile.warehouse:
+		frappe.throw(_("POS Profile {0} has no warehouse.").format(profile.name))
+	return profile.warehouse
+
+
+def _incoming_names(wh):
+	"""Draft transfers targeting `wh`, matched on the header AND on the item rows —
+	a Stock Entry can route each row to its own warehouse, leaving the header blank."""
+	by_header = frappe.get_all(
+		"Stock Entry",
+		filters={"docstatus": 0, "purpose": "Material Transfer", "to_warehouse": wh},
+		pluck="name",
+	)
+	by_row = frappe.get_all(
+		"Stock Entry Detail",
+		filters={"docstatus": 0, "parenttype": "Stock Entry", "t_warehouse": wh},
+		pluck="parent",
+	)
+	return set(by_header) | set(by_row)
+
+
+def _transfer_for_branch(name, wh):
+	"""Load a draft transfer and refuse anything that is not this branch's to receive."""
+	if not frappe.db.exists("Stock Entry", name):
+		frappe.throw(_("Transfer {0} does not exist.").format(name))
+	se = frappe.get_doc("Stock Entry", name)
+	if se.docstatus != 0:
+		frappe.throw(_("Transfer {0} is no longer a draft.").format(name))
+	if se.purpose != "Material Transfer":
+		frappe.throw(_("Stock Entry {0} is not a material transfer.").format(name))
+	if se.to_warehouse != wh and not any(row.t_warehouse == wh for row in se.items):
+		frappe.throw(_("Transfer {0} is not addressed to {1}.").format(name, wh), frappe.PermissionError)
+	return se
+
+
 @frappe.whitelist()
-def receive_goods(lines, supplier=None, note=None, warehouse=None):
-	"""Morning goods receipt → Stock Entry (Material Receipt) into the store."""
+def list_incoming_transfers(pos_profile=None):
+	"""Draft Material Transfers waiting to be received at this branch."""
+	_require_login()
+	p = _resolve_pos_profile(pos_profile)
+	wh = _branch_warehouse(p)
+	names = _incoming_names(wh)
+	if not names:
+		return {"warehouse": wh, "transfers": []}
+
+	entries = frappe.get_all(
+		"Stock Entry",
+		filters={"name": ["in", list(names)]},
+		fields=["name", "posting_date", "posting_time", "from_warehouse", "remarks", "owner"],
+		order_by="posting_date asc, posting_time asc",
+	)
+	totals = {}
+	for row in frappe.get_all(
+		"Stock Entry Detail",
+		filters={"parent": ["in", list(names)], "parenttype": "Stock Entry"},
+		fields=["parent", "qty", "s_warehouse"],
+	):
+		agg = totals.setdefault(row.parent, {"lines": 0, "qty": 0.0, "source": None})
+		agg["lines"] += 1
+		agg["qty"] += flt(row.qty)
+		agg["source"] = agg["source"] or row.s_warehouse
+	return {
+		"warehouse": wh,
+		"transfers": [
+			{
+				"name": e.name,
+				"date": str(e.posting_date),
+				"time": str(e.posting_time),
+				"from_warehouse": e.from_warehouse or totals.get(e.name, {}).get("source"),
+				"note": e.remarks,
+				"lines": totals.get(e.name, {}).get("lines", 0),
+				"total_qty": totals.get(e.name, {}).get("qty", 0.0),
+			}
+			for e in entries
+		],
+	}
+
+
+@frappe.whitelist()
+def get_transfer(name, pos_profile=None):
+	"""One draft transfer, opened for receiving: sent qty per row + what the branch
+	holds of that item right now."""
+	_require_login()
+	p = _resolve_pos_profile(pos_profile)
+	wh = _branch_warehouse(p)
+	se = _transfer_for_branch(name, wh)
+	stock = _stock_map([row.item_code for row in se.items], wh) if se.items else {}
+	return {
+		"name": se.name,
+		"warehouse": wh,
+		"from_warehouse": se.from_warehouse or (se.items[0].s_warehouse if se.items else None),
+		"date": str(se.posting_date),
+		"note": se.remarks,
+		"items": [
+			{
+				"row": row.name,
+				"id": row.item_code,
+				"name": frappe.db.get_value("Item", row.item_code, "item_name") or row.item_code,
+				"uom": row.uom,
+				"sent_qty": flt(row.qty),
+				"system_qty": float((stock.get(row.item_code) or {}).get("qty") or 0),
+			}
+			for row in se.items
+		],
+	}
+
+
+@frappe.whitelist()
+def confirm_transfer(name, lines=None, pos_profile=None):
+	"""Confirm receipt: rewrite the draft to the qty that actually arrived, then submit.
+
+	A short receipt is submitted as received — the shortfall is recorded in `remarks`,
+	not left pending, so the draft never lingers half-done in the inbox. Rows received
+	at 0 are dropped from the entry entirely."""
 	_require_login()
 	if isinstance(lines, str):
 		lines = json.loads(lines)
-	wh = _inv_warehouse(warehouse)
-	company = frappe.db.get_value("Warehouse", wh, "company") or cfg().company
-	se = frappe.new_doc("Stock Entry")
-	se.stock_entry_type = "Material Receipt"
-	se.company = company
-	se.to_warehouse = wh
-	remarks = " / ".join(x for x in [f"المورّد: {supplier}" if supplier else "", note or ""] if x)
-	if remarks:
-		se.remarks = remarks
-	for line in lines:
-		code = line.get("item_code") or line.get("id")
-		qty = flt(line.get("qty"))
-		if not code or qty <= 0:
-			continue
-		if not frappe.db.exists("Item", code):
-			frappe.throw(_("Unknown item: {0}").format(code))
-		row = {"item_code": code, "qty": qty, "t_warehouse": wh}
-		rate = _last_receipt_rate(code, wh)
-		if rate:
-			row["basic_rate"] = rate
-		if frappe.db.get_value("Item", code, "has_batch_no"):
-			row["use_serial_batch_fields"] = 1  # ERPNext auto-creates the batch on receipt
-		se.append("items", row)
-	if not se.get("items"):
-		frappe.throw(_("No items to receive."))
+	p = _resolve_pos_profile(pos_profile)
+	wh = _branch_warehouse(p)
+	se = _transfer_for_branch(name, wh)
+
+	edits = {row.get("row"): flt(row.get("qty")) for row in (lines or []) if row.get("row")}
+	changes, keep = [], []
+	for row in se.items:
+		received = edits.get(row.name, flt(row.qty))
+		if received < 0:
+			frappe.throw(_("Received quantity cannot be negative."))
+		if received != flt(row.qty):
+			changes.append(f"{row.item_code}: {flt(row.qty)} → {received}")
+		if received > 0:
+			row.qty = received
+			keep.append(row)
+	if not keep:
+		frappe.throw(_("Nothing was received."))
+
+	se.items = keep
+	for idx, row in enumerate(keep, start=1):
+		row.idx = idx
+	_stamp_branch(se, p)  # the desk creates the draft; the receiving branch owns the movement
+	if changes:
+		se.remarks = " / ".join(x for x in [se.remarks, "تعديل عند الاستلام — " + "، ".join(changes)] if x)
 	se.flags.ignore_permissions = True
-	se.insert(ignore_permissions=True)
+	se.save(ignore_permissions=True)
 	se.submit()
 	frappe.db.commit()
-	return {"name": se.name, "lines": len(se.items)}
+	return {"name": se.name, "lines": len(se.items), "total_qty": sum(flt(r.qty) for r in se.items)}
 
 
 # ---------------------------------------------------------------------------

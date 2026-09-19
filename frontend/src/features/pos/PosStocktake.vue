@@ -131,7 +131,7 @@ function resetWaste() {
         <h1 class="font-extrabold text-gray-800 text-base md:text-lg leading-tight">الجرد اليومي</h1>
         <div class="flex items-center gap-2">
           <i class="fa-solid fa-store text-pos-brand text-xs"></i>
-          <span class="text-xs text-pos-muted font-semibold">{{ BRANCH }} · جرد نهاية الوردية</span>
+          <span class="text-xs text-pos-muted font-semibold">{{ BRANCH }} · جرد نهاية اليوم</span>
         </div>
       </div>
     </div>
@@ -162,7 +162,7 @@ function resetWaste() {
     <div class="bg-pos-surface rounded-xl2 border border-pos-border shadow-sm flex flex-col overflow-hidden">
       <div class="px-4 py-2.5 border-b border-pos-border flex items-center gap-2 bg-pos-brand-light/40">
         <i class="fa-solid fa-boxes-stacked text-pos-brand text-xs"></i>
-        <span class="text-sm font-extrabold text-gray-800">جرد المخزن — المواد الخام</span>
+        <span class="text-sm font-extrabold text-gray-800">جرد المخزن — المتبقي في الفرع</span>
       </div>
       <div class="grid grid-cols-12 bg-pos-brand-light/70 border-b border-pos-border px-4 py-2.5 flex-shrink-0">
         <div class="col-span-5 text-xs font-extrabold text-gray-600">اسم الصنف</div>

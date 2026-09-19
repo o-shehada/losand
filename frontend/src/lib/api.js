@@ -95,8 +95,16 @@ export async function getWasteItems() {
   return call("losand.api.pos.get_waste_items")
 }
 
-export async function getReceivingItems() {
-  return call("losand.api.pos.get_receiving_items")
+export async function listIncomingTransfers() {
+  return call("losand.api.pos.list_incoming_transfers")
+}
+
+export async function getTransfer(name) {
+  return call("losand.api.pos.get_transfer", { name })
+}
+
+export async function confirmTransfer(name, lines) {
+  return call("losand.api.pos.confirm_transfer", { name, lines })
 }
 
 export async function saveStocktake(counts) {
@@ -105,10 +113,6 @@ export async function saveStocktake(counts) {
 
 export async function saveWaste(items) {
   return call("losand.api.pos.save_waste", { items })
-}
-
-export async function receiveGoods(payload) {
-  return call("losand.api.pos.receive_goods", payload)
 }
 
 export async function submitOrder(payload) {

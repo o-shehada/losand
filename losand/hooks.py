@@ -106,6 +106,7 @@ website_route_rules = [
 after_migrate = [
 	"losand.setup.arabic_translations.run",
 	"losand.setup.pos_profile_fields.run",
+	"losand.setup.branch_dimension.run",
 	"losand.setup.upload_wiki_images.run",
 	"losand.setup.publish_manufacturing_wiki.run",
 	"losand.setup.publish_print_formats.run",
