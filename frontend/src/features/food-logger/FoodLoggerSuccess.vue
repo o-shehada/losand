@@ -60,8 +60,8 @@ onUnmounted(() => clearInterval(timer))
           </div>
         </div>
         <div class="fade-up-1">
-          <h2 class="text-3xl font-black text-success mb-2">تم الحفظ</h2>
-          <p class="text-muted">تم حفظ دُفعة الإنتاج بنجاح</p>
+          <h2 class="text-3xl font-black text-success mb-2">{{ saved.review ? "تم الإرسال للمراجعة" : "تم الحفظ" }}</h2>
+          <p class="text-muted">{{ saved.review ? "حُفظت الدفعة كمسودة وسيرحّلها مشرف التصنيع بعد المراجعة" : "تم حفظ دُفعة الإنتاج بنجاح" }}</p>
         </div>
       </section>
 
@@ -84,7 +84,7 @@ onUnmounted(() => clearInterval(timer))
 
       <section class="mb-6 fade-up-3">
         <div class="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-          <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted"><div class="col-span-6">المنتج</div><div class="col-span-2 text-center">الكمية</div><div class="col-span-4 text-center">التكلفة/قطعة</div></div>
+          <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted"><div class="col-span-6">المنتج</div><div class="col-span-2 text-center">الكمية</div><div v-if="session.canSeeCost" class="col-span-4 text-center">التكلفة/قطعة</div></div>
           <div v-for="(f, i) in producedProducts" :key="f.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < producedProducts.length - 1 ? 'border-b border-border' : ''">
             <div class="col-span-6 font-semibold text-sm">{{ f.name }}</div>
             <div class="col-span-2 text-center text-sm font-bold">{{ f.qty }}</div>
@@ -93,7 +93,7 @@ onUnmounted(() => clearInterval(timer))
         </div>
       </section>
 
-      <section class="mb-6 fade-up-4">
+      <section v-if="!saved.review" class="mb-6 fade-up-4">
         <div class="bg-white rounded-2xl border border-border shadow-sm p-5">
           <div class="flex items-center gap-2 mb-3">
             <i class="fa-solid fa-cloud-arrow-up text-success"></i>

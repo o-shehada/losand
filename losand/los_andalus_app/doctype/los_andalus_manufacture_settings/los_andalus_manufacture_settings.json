@@ -11,7 +11,9 @@
   "column_break_1",
   "source_warehouse",
   "wip_warehouse",
-  "fg_warehouse"
+  "fg_warehouse",
+  "section_workers",
+  "worker_submission"
  ],
  "fields": [
   {"fieldname": "company", "fieldtype": "Link", "label": "Company", "options": "Company"},
@@ -21,7 +23,9 @@
   {"fieldname": "column_break_1", "fieldtype": "Column Break"},
   {"fieldname": "source_warehouse", "fieldtype": "Link", "label": "Default Source Warehouse (fallback)", "options": "Warehouse"},
   {"fieldname": "wip_warehouse", "fieldtype": "Link", "label": "Default WIP Warehouse (fallback)", "options": "Warehouse"},
-  {"fieldname": "fg_warehouse", "fieldtype": "Link", "label": "Default FG Warehouse (fallback)", "options": "Warehouse"}
+  {"fieldname": "fg_warehouse", "fieldtype": "Link", "label": "Default FG Warehouse (fallback)", "options": "Warehouse"},
+  {"fieldname": "section_workers", "fieldtype": "Section Break", "label": "Workers"},
+  {"fieldname": "worker_submission", "fieldtype": "Select", "label": "Worker Submission", "options": "Save for supervisor review\nPost directly", "default": "Save for supervisor review", "description": "What happens when a worker (Manufacturing User, Manufacture Operator) finishes a run. \"Save for supervisor review\": the run is saved as a draft and a Manufacture Supervisor reviews and posts it. \"Post directly\": the worker posts it. Workers never see costs either way."}
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,

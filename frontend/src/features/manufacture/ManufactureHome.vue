@@ -11,6 +11,45 @@ const workbenches = ref([])
 const loading = ref(true)
 const selected = ref(null)
 const shift = ref("")
+const drafts = ref([]) // saved runs waiting for a supervisor to review and post
+const draftBusy = ref("")
+const draftError = ref("")
+const confirmDiscard = ref("") // draft name awaiting a second tap to delete
+
+async function loadDrafts() {
+  drafts.value = (await call("losand.api.manufacture.get_pending_drafts").catch(() => [])) || []
+}
+async function reviewDraft(d) {
+  draftBusy.value = d.name
+  draftError.value = ""
+  try {
+    const draft = await call("losand.api.manufacture.get_draft", { name: d.name })
+    draft.dateLabel = createDraft().dateLabel
+    sessionStorage.setItem("foodLoggerDraft", JSON.stringify(draft))
+    router.push("/food-logger/summary")
+  } catch (e) {
+    draftError.value = e.message
+  } finally {
+    draftBusy.value = ""
+  }
+}
+async function discardDraft(d) {
+  if (confirmDiscard.value !== d.name) {
+    confirmDiscard.value = d.name
+    return
+  }
+  draftBusy.value = d.name
+  draftError.value = ""
+  try {
+    await call("losand.api.manufacture.discard_draft", { name: d.name })
+    confirmDiscard.value = ""
+    await loadDrafts()
+  } catch (e) {
+    draftError.value = e.message
+  } finally {
+    draftBusy.value = ""
+  }
+}
 
 async function logout() {
   await signOut()
@@ -54,6 +93,7 @@ onMounted(async () => {
   timer = setInterval(tick, 60000)
   try {
     workbenches.value = (await call("losand.api.manufacture.get_workbenches")) || []
+    await loadDrafts()
   } finally {
     loading.value = false
   }
@@ -122,6 +162,22 @@ onUnmounted(() => clearInterval(timer))
           بدء الإنتاج
         </button>
       </div>
+
+      <!-- Saved runs waiting for review (supervisors post them; operators see their own) -->
+      <section v-if="drafts.length" data-testid="pending-drafts" class="mt-8">
+        <h2 class="text-base font-bold text-text mb-3 flex items-center gap-2"><i class="fa-solid fa-hourglass-half text-primary"></i>{{ session.canPost ? "مسودات بانتظار المراجعة" : "دفعاتي بانتظار المراجعة" }}<span class="text-xs font-bold bg-primary-light text-primary rounded-full px-2 py-0.5">{{ drafts.length }}</span></h2>
+        <p v-if="draftError" class="text-xs text-danger font-bold mb-2">{{ draftError }}</p>
+        <div class="flex flex-col gap-2">
+          <div v-for="d in drafts" :key="d.name" class="bg-white rounded-2xl border border-border p-4 flex items-center gap-3 flex-wrap">
+            <div class="flex-1 min-w-[200px]">
+              <p class="font-bold text-text">{{ d.workbench }} <span class="text-xs text-muted font-medium">· {{ d.shift || "—" }}</span></p>
+              <p class="text-xs text-muted mt-0.5">{{ d.name }} · {{ d.operator_name }} · {{ String(d.creation).slice(0, 16) }} · {{ d.total_produced_qty || 0 }} قطعة<template v-if="session.canSeeCost && d.total_raw_cost"> · {{ Number(d.total_raw_cost).toFixed(2) }} {{ cur }}</template></p>
+            </div>
+            <button v-if="session.canProduce" @click="reviewDraft(d)" :disabled="draftBusy === d.name" class="rounded-xl bg-primary text-white text-sm font-bold px-4 py-2 min-h-[40px] hover:bg-primary-dark disabled:opacity-50"><i class="fa-solid fa-clipboard-check ml-1"></i> مراجعة وترحيل</button>
+            <button @click="discardDraft(d)" :disabled="draftBusy === d.name" class="rounded-xl border text-sm font-bold px-4 py-2 min-h-[40px] disabled:opacity-50" :class="confirmDiscard === d.name ? 'border-danger text-danger bg-red-50' : 'border-border text-muted hover:border-danger hover:text-danger'">{{ confirmDiscard === d.name ? "اضغط للتأكيد" : "حذف" }}</button>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 </template>

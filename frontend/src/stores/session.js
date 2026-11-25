@@ -6,6 +6,7 @@ export const session = reactive({
   canProduce: false,
   canSeeCost: false,
   canEnter: false,
+  canPost: false, // supervisors, or workers when Manufacture Settings lets them post directly
   initialized: false,
   loading: false,
   error: "",
@@ -24,6 +25,7 @@ export async function refreshSession() {
     session.canProduce = !!current.can_produce
     session.canSeeCost = !!current.can_see_cost
     session.canEnter = !!current.can_enter
+    session.canPost = !!current.can_post
     session.initialized = true
     return current
   } catch (error) {
@@ -54,5 +56,6 @@ export async function signOut() {
   session.canProduce = false
   session.canSeeCost = false
   session.canEnter = false
+  session.canPost = false
   session.initialized = true
 }

@@ -3,6 +3,8 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from losand.utils import submit_as_system
+
 # Defaults used only as fallbacks when the Settings single is empty.
 DEFAULT_COMPANY = "Los Andalus"
 DEFAULT_SOURCE_WAREHOUSE = "Stores - LA"
@@ -10,6 +12,11 @@ DEFAULT_WIP_WAREHOUSE = "Work In Progress - LA"
 DEFAULT_FG_WAREHOUSE = "Finished Goods - LA"
 DEFAULT_RAW_MATERIAL_GROUP = "Raw Material"
 DEFAULT_FACTORY_NAME = "مصنع الغذاء الحديث"
+
+
+# Manufacture Settings > Worker Submission: what happens when an operator finishes a run.
+MODE_REVIEW = "Save for supervisor review"  # operator saves a draft, a supervisor reviews and posts
+MODE_DIRECT = "Post directly"  # operator posts the run themselves (costs stay hidden from them)
 
 
 def cfg():
@@ -25,6 +32,7 @@ def cfg():
 		raw_group=s.raw_material_group or DEFAULT_RAW_MATERIAL_GROUP,
 		factory_name=s.factory_name or DEFAULT_FACTORY_NAME,
 		clearing=s.production_clearing_account,
+		worker_mode=s.worker_submission or MODE_REVIEW,
 	)
 
 
@@ -43,6 +51,11 @@ def can_produce():
 
 def can_enter():
 	return bool(_roles() & ENTER_ROLES)
+
+
+def can_post():
+	"""Supervisors always; entry roles only when the settings let workers post directly."""
+	return can_produce() or (can_enter() and cfg().worker_mode == MODE_DIRECT)
 
 
 def _allowed_workbench_names(user=None):
@@ -76,6 +89,8 @@ def get_current_session():
 		"can_produce": can_produce(),
 		"can_enter": can_enter(),
 		"can_see_cost": can_produce(),  # rates/costs: supervisors and managers only
+		"can_post": can_post(),
+		"worker_mode": cfg().worker_mode,
 	}
 
 
@@ -307,6 +322,72 @@ def _compute_and_fill(batch, payload):
 	batch.total_produced_qty = sum(float(f.get("qty") or 0) for f in payload.get("finished_products") or [])
 
 
+def _load_batch(payload):
+	"""The Draft batch named in the payload (a saved draft being finished), else a new one.
+	Anyone may continue their own draft; only supervisors may take over someone else's."""
+	name = payload.get("batchName")
+	if not (name and frappe.db.exists("Los Andalus Production Batch", name)):
+		return frappe.new_doc("Los Andalus Production Batch")
+	batch = frappe.get_doc("Los Andalus Production Batch", name)
+	if batch.status != "Draft":
+		frappe.throw(_("Batch {0} is no longer a draft.").format(name))
+	if batch.operator != frappe.session.user and not can_produce():
+		frappe.throw(_("This draft belongs to another user."), frappe.PermissionError)
+	return batch
+
+
+def _apply_context(batch, wb, payload):
+	"""Workbench context + computed children on a batch (new or an existing draft)."""
+	batch.update(
+		{
+			"workbench": wb.name,
+			"product_category": wb.product_category,
+			"shift": payload.get("shift"),
+			"raw_material_warehouse": wb.raw_material_warehouse,
+			"manufacturing_warehouse": wb.manufacturing_warehouse,
+			"fg_warehouse": wb.fg_warehouse,
+			"batch_reference": payload.get("batchRef"),
+			"status": "Draft",
+			"notes": payload.get("notes"),
+			"cost_center": wb.get("cost_center"),
+		}
+	)
+	if batch.is_new():
+		batch.operator = frappe.session.user  # who entered it, kept when a supervisor posts it
+	_compute_and_fill(batch, payload)
+
+
+def _fill_waste(batch, payload):
+	"""Finished-product waste (الهالك): a produced item spoiled during the run. It is received
+	then written off, so it can never exceed what this batch produced. Returns {item: qty}."""
+	from frappe.utils import flt
+
+	produced = {o.item_code: flt(o.qty) for o in batch.outputs}
+	batch.set("product_waste", [])
+	waste = {}
+	for w in payload.get("product_waste") or []:
+		code, qty = w.get("item_code"), flt(w.get("qty"))
+		if not code or qty <= 0:
+			continue
+		if code not in produced:
+			frappe.throw(_("Waste item {0} is not one of the produced items.").format(code))
+		waste[code] = waste.get(code, 0) + qty
+		batch.append(
+			"product_waste",
+			{
+				"item_code": code,
+				"item_name": frappe.db.get_value("Item", code, "item_name"),
+				"qty": qty,
+				"unit": frappe.db.get_value("Item", code, "stock_uom"),
+				"reason": w.get("reason"),
+			},
+		)
+	for code, qty in waste.items():
+		if qty > produced[code] + 1e-9:
+			frappe.throw(_("Waste of {0} ({1}) exceeds the produced quantity ({2}).").format(code, qty, produced[code]))
+	return waste
+
+
 @frappe.whitelist()
 def save_draft(payload):
 	"""Create/update a Draft Production Batch (no stock movement)."""
@@ -325,27 +406,9 @@ def save_draft(payload):
 	_require_workbench_access(wb_name)
 	wb = frappe.get_cached_doc("Workbench", wb_name)
 
-	name = payload.get("batchName")
-	batch = (
-		frappe.get_doc("Los Andalus Production Batch", name)
-		if name and frappe.db.exists("Los Andalus Production Batch", name)
-		else frappe.new_doc("Los Andalus Production Batch")
-	)
-	batch.update(
-		{
-			"workbench": wb.name,
-			"product_category": wb.product_category,
-			"shift": payload.get("shift"),
-			"raw_material_warehouse": wb.raw_material_warehouse,
-			"manufacturing_warehouse": wb.manufacturing_warehouse,
-			"fg_warehouse": wb.fg_warehouse,
-			"batch_reference": payload.get("batchRef"),
-			"operator": frappe.session.user,
-			"status": "Draft",
-			"notes": payload.get("notes"),
-		}
-	)
-	_compute_and_fill(batch, payload)
+	batch = _load_batch(payload)
+	_apply_context(batch, wb, payload)
+	_fill_waste(batch, payload)
 	batch.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {
@@ -354,6 +417,91 @@ def save_draft(payload):
 		"totalRawCost": batch.total_raw_cost if can_produce() else None,  # cost: producers only
 		"totalOutputWeight": batch.total_output_weight,
 	}
+
+
+@frappe.whitelist()
+def get_pending_drafts():
+	"""Drafts waiting for a supervisor to review and post, on the user's workbenches.
+	Supervisors see everyone's; an operator sees only their own."""
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"), frappe.PermissionError)
+	allowed = _allowed_workbench_names()
+	if not allowed or not can_enter():
+		return []
+	filters = {"status": "Draft", "workbench": ["in", allowed]}
+	if not can_produce():
+		filters["operator"] = frappe.session.user
+	rows = frappe.get_all(
+		"Los Andalus Production Batch",
+		filters=filters,
+		fields=["name", "workbench", "shift", "operator", "creation", "total_produced_qty", "total_raw_cost"],
+		order_by="creation desc",
+		limit=50,
+	)
+	for r in rows:
+		r["operator_name"] = frappe.db.get_value("User", r.operator, "full_name") or r.operator
+		if not can_produce():
+			r["total_raw_cost"] = None
+	return rows
+
+
+@frappe.whitelist()
+def get_draft(name):
+	"""A saved draft rebuilt as the portal's draft object, so a supervisor can review it on
+	the summary screen and post it. Supervisors only: it carries rates and costs."""
+	if not can_produce():
+		frappe.throw(_("You do not have permission to review drafts."), frappe.PermissionError)
+	batch = frappe.get_doc("Los Andalus Production Batch", name)
+	if batch.status != "Draft":
+		frappe.throw(_("Batch {0} is no longer a draft.").format(name))
+	_require_workbench_access(batch.workbench)
+	waste = {w.item_code: w for w in batch.product_waste}
+
+	def rows(table):
+		return [
+			{"item_code": m.item_code, "name_ar": m.item_name, "name_en": "", "unit": m.unit, "rate": m.rate, "available": 0, "qty": m.qty}
+			for m in table
+		]
+
+	return {
+		"batchName": batch.name,
+		"workbench": batch.workbench,
+		"category": batch.product_category,
+		"shift": batch.shift,
+		"raw_warehouse": batch.raw_material_warehouse,
+		"mfg_warehouse": batch.manufacturing_warehouse,
+		"fg_warehouse": batch.fg_warehouse,
+		"batchRef": batch.batch_reference,
+		"notes": batch.notes,
+		"operator": batch.operator,
+		"raw_materials": rows(batch.materials),
+		"losses": rows(batch.losses),
+		"finished_products": [
+			{
+				"item_code": o.item_code,
+				"name": o.item_name,
+				"weight": o.weight_per_unit,
+				"qty": o.qty,
+				"waste": waste[o.item_code].qty if o.item_code in waste else 0,
+				"waste_reason": waste[o.item_code].reason if o.item_code in waste else "",
+			}
+			for o in batch.outputs
+		],
+	}
+
+
+@frappe.whitelist()
+def discard_draft(name):
+	"""Delete a draft that will not be posted. Supervisors, or the operator who entered it."""
+	batch = frappe.get_doc("Los Andalus Production Batch", name)
+	if batch.status != "Draft":
+		frappe.throw(_("Batch {0} is no longer a draft.").format(name))
+	if not can_produce() and batch.operator != frappe.session.user:
+		frappe.throw(_("This draft belongs to another user."), frappe.PermissionError)
+	_require_workbench_access(batch.workbench)
+	frappe.delete_doc("Los Andalus Production Batch", name, ignore_permissions=True)
+	frappe.db.commit()
+	return {"name": name}
 
 
 def _fefo_rows(item_code, warehouse, qty):
@@ -421,8 +569,8 @@ def submit_batch(payload, totals=None):
 		payload = json.loads(payload)
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Login required"), frappe.PermissionError)
-	if not can_produce():
-		frappe.throw(_("You do not have permission to produce (Manufacture Supervisor role required)."), frappe.PermissionError)
+	if not can_post():
+		frappe.throw(_("You do not have permission to post production (send it for supervisor review instead)."), frappe.PermissionError)
 
 	wb_name = payload.get("workbench")
 	if not wb_name:
@@ -433,44 +581,18 @@ def submit_batch(payload, totals=None):
 	clearing = c.clearing or frappe.db.get_value("Account", {"company": c.company, "account_type": "Stock Adjustment", "is_group": 0}, "name")
 	rm_wh, wip_wh, fg_wh = wb.raw_material_warehouse, wb.manufacturing_warehouse, wb.fg_warehouse
 
-	# Build the batch (Draft) with computed children
-	batch = frappe.new_doc("Los Andalus Production Batch")
-	batch.update(
-		{
-			"workbench": wb.name,
-			"product_category": wb.product_category,
-			"shift": payload.get("shift"),
-			"raw_material_warehouse": rm_wh,
-			"manufacturing_warehouse": wip_wh,
-			"fg_warehouse": fg_wh,
-			"batch_reference": payload.get("batchRef"),
-			"operator": frappe.session.user,
-			"status": "Draft",
-			"notes": payload.get("notes"),
-		}
-	)
-	_compute_and_fill(batch, payload)
+	# Build the batch (Draft) with computed children; a saved draft is finished, not duplicated
+	batch = _load_batch(payload)
+	_apply_context(batch, wb, payload)
 	if not batch.materials:
 		frappe.throw(_("Enter at least one raw material consumed"))
 	if not batch.outputs:
 		frappe.throw(_("Enter at least one finished product"))
-	batch.cost_center = wb.get("cost_center")
-	# Finished-product waste (الهالك): a produced item spoiled during the run. Received
-	# then written off, so it can never exceed what this batch produced.
-	produced = {o.item_code: flt(o.qty) for o in batch.outputs}
-	waste = {}
-	for w in payload.get("product_waste") or []:
-		code, qty = w.get("item_code"), flt(w.get("qty"))
-		if not code or qty <= 0:
-			continue
-		if code not in produced:
-			frappe.throw(_("Waste item {0} is not one of the produced items.").format(code))
-		waste[code] = waste.get(code, 0) + qty
-		batch.append("product_waste", {"item_code": code, "item_name": frappe.db.get_value("Item", code, "item_name"), "qty": qty, "unit": frappe.db.get_value("Item", code, "stock_uom"), "reason": w.get("reason")})
-	for code, qty in waste.items():
-		if qty > produced[code] + 1e-9:
-			frappe.throw(_("Waste of {0} ({1}) exceeds the produced quantity ({2}).").format(code, qty, produced[code]))
-	batch.insert(ignore_permissions=True)
+	waste = _fill_waste(batch, payload)
+	if batch.is_new():
+		batch.insert(ignore_permissions=True)
+	else:
+		batch.save(ignore_permissions=True)
 	material_issue_rows = _material_issue_rows(batch)
 
 	def _stamp_cc(se):
@@ -501,7 +623,7 @@ def submit_batch(payload, totals=None):
 				transfer.append("items", row)
 		_stamp_cc(transfer)
 		transfer.insert(ignore_permissions=True)
-		transfer.submit()
+		submit_as_system(transfer)
 		batch.db_set("transfer_entry", transfer.name)
 		batch.db_set("status", "Transferred")
 
@@ -514,7 +636,7 @@ def submit_batch(payload, totals=None):
 				issue.append("items", row)
 		_stamp_cc(issue)
 		issue.insert(ignore_permissions=True)
-		issue.submit()
+		submit_as_system(issue)
 		issue.reload()
 		c_actual = sum(flt(i.amount) for i in issue.items)
 		batch.db_set("issue_entry", issue.name)
@@ -531,7 +653,7 @@ def submit_batch(payload, totals=None):
 			receipt.append("items", row)
 		_stamp_cc(receipt)
 		receipt.insert(ignore_permissions=True)
-		receipt.submit()
+		submit_as_system(receipt)
 		receipt.reload()
 		batch.db_set("receipt_entry", receipt.name)
 
@@ -562,7 +684,7 @@ def submit_batch(payload, totals=None):
 			wst.remarks = "هالك إنتاج — " + batch.name
 			_stamp_cc(wst)
 			wst.insert(ignore_permissions=True)
-			wst.submit()
+			submit_as_system(wst)
 			batch.db_set("waste_entry", wst.name)
 		batch.db_set("status", "Completed")
 		frappe.db.commit()

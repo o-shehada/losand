@@ -63,6 +63,10 @@ ERPNext: Sales Invoice, Stock Entry, POS Profile, Item, Batch, Warehouse, Cost C
 - **Raw-material loss (الفاقد)** is consumed with the materials and absorbed into product cost.
 - **Finished-product waste (الهالك)** is a fourth Material Issue out of the finished-goods warehouse, limited to what the run produced.
 - Costs and rates are shown only to Manufacturing Manager, Manufacture Supervisor and System Manager.
+- **Worker Submission** (Los Andalus Manufacture Settings) decides what a worker does at the end of a run:
+  - *Save for supervisor review* (default): the worker's run is saved as a draft with no stock movement. A supervisor sees it under "مسودات بانتظار المراجعة" on the portal's start screen, reviews it with its costs, and posts it, or deletes it. The batch records who entered it; the stock entries are owned by whoever posted.
+  - *Post directly*: the worker posts the run themselves. They still never see costs.
+  - Supervisors can always post.
 
 ### Workspaces and reports
 
@@ -141,7 +145,7 @@ Run the daily stock count first. The closing screen blocks confirmation until it
 |---|---|
 | Any logged-in user with a POS Profile | Sell, receive, count, waste, close their shift |
 | **POS Manager** | Also return, edit and cancel submitted invoices; edit kitchen notes |
-| **Manufacturing User / Manufacture Operator / Stock User** | Enter production data on their assigned workbenches (no cost shown) |
+| **Manufacturing User / Manufacture Operator / Stock User** | Enter production data on their assigned workbenches (no cost shown); post it, or send it for review, per *Worker Submission* |
 | **Manufacture Supervisor / Manufacturing Manager** | Post production runs and see rates and costs |
 | **System Manager** | Everything |
 

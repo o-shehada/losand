@@ -16,6 +16,9 @@ const producedProducts = computed(() => draft.finished_products.filter((f) => Nu
 const usedMaterials = computed(() => draft.raw_materials.filter((m) => Number(m.qty) > 0))
 const lossMaterials = computed(() => (draft.losses || []).filter((m) => Number(m.qty) > 0))
 const saving = ref(false)
+const postError = ref("")
+// A draft opened for review has no entry form to go back to: supervisors return to the list.
+const goBack = () => router.push(draft.batchName && session.canProduce ? "/home" : "/food-logger/new")
 
 async function logout() {
   await signOut()
@@ -25,12 +28,14 @@ async function logout() {
 async function save() {
   if (saving.value) return
   saving.value = true
+  postError.value = ""
   try {
     // Re-check at the point of posting so a role change in another tab/Desk is
     // reflected without requiring a hard reload.
     await refreshSession()
-    if (!session.canProduce) return
-    const result = await call("losand.api.manufacture.submit_batch", {
+    const post = session.canPost // supervisors post; workers send the run for review
+    if (!post && !session.canEnter) return
+    const result = await call(post ? "losand.api.manufacture.submit_batch" : "losand.api.manufacture.save_draft", {
       payload: {
         ...draft,
         product_waste: draft.finished_products
@@ -38,11 +43,15 @@ async function save() {
           .map((f) => ({ item_code: f.item_code, qty: Number(f.waste), reason: f.waste_reason })),
       },
     })
+    if (!post) {
+      result.review = true
+      result.draft = { ...draft } // the draft endpoint does not echo it back
+    }
     sessionStorage.setItem("foodLoggerSuccess", JSON.stringify(result))
     sessionStorage.removeItem("foodLoggerDraft")
     router.push("/food-logger/success")
   } catch (e) {
-    alert(e.message)
+    postError.value = e.message // inline, not alert(): a native dialog blocks the page
   } finally {
     saving.value = false
   }
@@ -77,7 +86,7 @@ onUnmounted(() => clearInterval(timer))
         </div>
       </div>
       <div class="px-6 py-4 bg-white flex items-center gap-4">
-        <button @click="router.push('/food-logger/new')" class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center border border-border hover:bg-slate-200"><i class="fa-solid fa-arrow-right text-text"></i></button>
+        <button @click="goBack" class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center border border-border hover:bg-slate-200"><i class="fa-solid fa-arrow-right text-text"></i></button>
         <div>
           <h1 class="text-xl font-bold">ملخص الإنتاج — {{ draft.category }}</h1>
           <p class="text-sm text-muted mt-0.5">{{ draft.workbench }} · {{ draft.shift }} · {{ draft.batchRef }}</p>
@@ -143,15 +152,16 @@ onUnmounted(() => clearInterval(timer))
 
     <footer class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-border shadow-lg">
       <div class="max-w-4xl mx-auto px-4 md:px-6 py-3">
-        <div v-if="session.initialized && !session.canProduce" class="mb-2 flex items-center gap-2 text-xs font-bold text-danger bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-          <i class="fa-solid fa-lock"></i>
-          <span>ليس لديك صلاحية ترحيل الإنتاج (مطلوب دور «مشرف التصنيع»).</span>
+        <div v-if="session.initialized && !session.canPost" class="mb-2 flex items-center gap-2 text-xs font-bold text-primary bg-primary-light border border-primary/20 rounded-lg px-3 py-2">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>ستُحفظ الدفعة كمسودة ويراجعها مشرف التصنيع ويرحّلها.</span>
         </div>
+        <div v-if="postError" data-testid="post-error" class="mb-2 flex items-center gap-2 text-xs font-bold text-danger bg-red-50 border border-red-100 rounded-lg px-3 py-2"><i class="fa-solid fa-triangle-exclamation"></i><span>{{ postError }}</span></div>
         <div class="flex items-center gap-3">
-          <button @click="router.push('/food-logger/new')" class="flex items-center gap-2 px-5 py-3 bg-slate-100 text-muted rounded-xl text-sm font-semibold border border-border hover:bg-slate-200"><i class="fa-solid fa-arrow-right text-sm"></i> رجوع</button>
-          <button @click="save" :disabled="saving || session.loading || (session.initialized && !session.canProduce)" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <button @click="goBack" class="flex items-center gap-2 px-5 py-3 bg-slate-100 text-muted rounded-xl text-sm font-semibold border border-border hover:bg-slate-200"><i class="fa-solid fa-arrow-right text-sm"></i> رجوع</button>
+          <button @click="save" :disabled="saving || session.loading || (session.initialized && !session.canEnter)" class="flex-1 flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <i class="fa-solid" :class="saving ? 'fa-spinner fa-spin' : 'fa-circle-check'"></i>
-            {{ saving ? "جارٍ الترحيل..." : "تأكيد وترحيل الدفعة" }}
+            {{ saving ? "جارٍ الحفظ..." : session.canPost ? "تأكيد وترحيل الدفعة" : "إرسال للمراجعة" }}
           </button>
         </div>
       </div>

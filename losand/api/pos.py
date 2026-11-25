@@ -4,6 +4,8 @@ import json
 
 import frappe
 from frappe import _
+
+from losand.utils import cancel_as_system, submit_as_system
 from frappe.utils import cint, flt
 
 from losand.api.manufacture import _last_receipt_rate, _stock_map, _stock_rows, cfg
@@ -686,7 +688,7 @@ def submit_order(
 			frappe.throw(_("Partial payment is not allowed by POS Profile {0}.").format(p.name))
 
 	si.insert(ignore_permissions=True)  # validate() recomputes paid/change from payments
-	si.submit()
+	submit_as_system(si)
 	# Decrement the card only after the invoice is submitted; an earlier failure rolls
 	# back with the transaction (no commit yet), so the balance is never lost.
 	if gc and gift_applied > 0:
@@ -830,7 +832,7 @@ def save_stocktake(counts, warehouse=None, pos_profile=None):
 		_stamp_branch(se, p)
 		se.flags.ignore_permissions = True
 		se.insert(ignore_permissions=True)
-		se.submit()
+		submit_as_system(se)
 		entries.append(se.name)
 		short_value = flt(se.total_amount)
 	if surplus:
@@ -849,7 +851,7 @@ def save_stocktake(counts, warehouse=None, pos_profile=None):
 		_stamp_branch(se, p)
 		se.flags.ignore_permissions = True
 		se.insert(ignore_permissions=True)
-		se.submit()
+		submit_as_system(se)
 		entries.append(se.name)
 		surplus_value = flt(se.total_amount)
 
@@ -933,7 +935,7 @@ def save_waste(items, pos_profile=None):
 	_stamp_branch(se, p)
 	se.flags.ignore_permissions = True
 	se.insert(ignore_permissions=True)
-	se.submit()
+	submit_as_system(se)
 	frappe.db.commit()
 	return {"entry": se.name, "items": len(lines)}
 
@@ -1090,7 +1092,7 @@ def confirm_transfer(name, lines=None, pos_profile=None):
 		se.remarks = " / ".join(x for x in [se.remarks, "تعديل عند الاستلام — " + "، ".join(changes)] if x)
 	se.flags.ignore_permissions = True
 	se.save(ignore_permissions=True)
-	se.submit()
+	submit_as_system(se)
 	frappe.db.commit()
 	return {"name": se.name, "lines": len(se.items), "total_qty": sum(flt(r.qty) for r in se.items)}
 
@@ -1351,7 +1353,7 @@ def return_invoice(invoice):
 	return_doc = make_return_doc("Sales Invoice", invoice)
 	return_doc.flags.ignore_permissions = True
 	return_doc.insert(ignore_permissions=True)
-	return_doc.submit()
+	submit_as_system(return_doc)
 	frappe.db.commit()
 	return {"name": return_doc.name, "return_against": invoice}
 
@@ -1379,7 +1381,7 @@ def edit_invoice(invoice):
 		line["qty"] += flt(row.qty)
 	table = doc.po_no
 	doc.flags.ignore_permissions = True
-	doc.cancel()
+	cancel_as_system(doc)
 	frappe.db.commit()
 	# The corrected order is submitted as an AMENDMENT of this now-cancelled invoice
 	# (submit_order's `amended_from`), so ERPNext names it <original>-1 and the audit
@@ -1400,6 +1402,6 @@ def cancel_invoice(invoice):
 	if doc.docstatus != 1:
 		frappe.throw(_("Only a submitted invoice can be cancelled."))
 	doc.flags.ignore_permissions = True
-	doc.cancel()
+	cancel_as_system(doc)
 	frappe.db.commit()
 	return {"name": invoice}
