@@ -43,7 +43,7 @@ onUnmounted(() => clearInterval(timer))
     <header class="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
       <div class="bg-primary px-6 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center"><i class="fa-solid fa-industry text-white text-base"></i></div>
+          <img :src="'/assets/losand/images/losand-logo.jpg'" alt="Los Andalos" class="w-10 h-10 rounded-xl bg-white object-contain p-0.5" />
           <div><p class="text-white/70 text-xs font-medium">نظام إدارة الإنتاج</p><p class="text-white font-bold text-sm">{{ factoryName }}</p></div>
         </div>
         <div class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-1.5"><i class="fa-regular fa-clock text-white/80 text-sm"></i><span class="text-white font-semibold text-sm">{{ liveTime }}</span></div>

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue"
 import { BRANCH, ar } from "./data"
 import { listIncomingTransfers, getTransfer, confirmTransfer } from "@/lib/api"
+import { pos } from "@/stores/pos"
 
 // استلام الطلبات = inbox of DRAFT Material Transfers already addressed to this branch's
 // warehouse (created in the desk by whoever ships). Open one, edit what actually
@@ -15,6 +16,7 @@ const opening = ref(false)
 const submitting = ref(false)
 const error = ref("")
 const done = ref(null)
+const expandedRow = ref(null) // transfer name whose item breakdown is open
 
 async function load() {
   loading.value = true
@@ -22,6 +24,7 @@ async function load() {
   try {
     const res = await listIncomingTransfers()
     transfers.value = res.transfers || []
+    pos.incoming = transfers.value.length // keep the sidebar badge in step with this list
   } catch (e) {
     error.value = e.message
   } finally {
@@ -131,12 +134,12 @@ function reset() {
         <i class="fa-solid fa-inbox text-2xl mb-2 block opacity-60"></i>
         لا توجد تحويلات بانتظار الاستلام
       </div>
+      <div v-for="t in transfers" :key="t.name" class="bg-pos-surface rounded-xl2 border border-pos-border shadow-sm overflow-hidden">
+      <div class="flex items-center">
       <button
-        v-for="t in transfers"
-        :key="t.name"
         @click="openTransfer(t.name)"
         :disabled="opening"
-        class="pos-btn bg-pos-surface rounded-xl2 border border-pos-border shadow-sm px-4 py-3.5 flex items-center gap-3 text-right hover:border-pos-brand/50 transition-colors disabled:opacity-50"
+        class="pos-btn flex-1 min-w-0 px-4 py-3.5 flex items-center gap-3 text-right hover:bg-pos-brand-light/30 transition-colors disabled:opacity-50"
       >
         <div class="w-10 h-10 rounded-xl bg-pos-brand-light flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-truck-fast text-pos-brand"></i></div>
         <div class="flex-1 min-w-0">
@@ -147,6 +150,22 @@ function reset() {
         </div>
         <span class="text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-pos-amber/10 text-pos-amber flex-shrink-0">بانتظار الاستلام</span>
       </button>
+      <button
+        :aria-expanded="expandedRow === t.name"
+        :data-testid="'expand-' + t.name"
+        aria-label="عرض الأصناف"
+        @click="expandedRow = expandedRow === t.name ? null : t.name"
+        class="w-10 h-10 mx-3 rounded-lg border border-pos-border flex items-center justify-center text-pos-muted flex-shrink-0 hover:border-pos-brand/50"
+      ><i class="fa-solid text-xs" :class="expandedRow === t.name ? 'fa-chevron-up' : 'fa-chevron-down'"></i></button>
+      </div>
+      <div v-if="expandedRow === t.name" class="border-t border-pos-border bg-pos-canvas px-4 py-2 divide-y divide-pos-border">
+        <div v-for="(it, i) in t.items" :key="i" class="py-2 flex items-center justify-between gap-3 text-xs font-semibold text-gray-700">
+          <span class="font-bold">{{ it.name }}</span>
+          <span class="text-pos-muted">{{ it.from || "—" }}</span>
+          <span>{{ ar(it.qty) }} {{ it.uom }}</span>
+        </div>
+      </div>
+      </div>
     </template>
 
     <!-- OPENED TRANSFER -->

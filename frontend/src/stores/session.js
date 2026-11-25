@@ -4,6 +4,7 @@ import { getCurrentSession, login, logout } from "@/lib/api"
 export const session = reactive({
   user: window.boot?.user || "Guest",
   canProduce: false,
+  canSeeCost: false,
   canEnter: false,
   initialized: false,
   loading: false,
@@ -21,6 +22,7 @@ export async function refreshSession() {
     const current = await getCurrentSession()
     session.user = current.user
     session.canProduce = !!current.can_produce
+    session.canSeeCost = !!current.can_see_cost
     session.canEnter = !!current.can_enter
     session.initialized = true
     return current
@@ -50,6 +52,7 @@ export async function signOut() {
   await logout()
   session.user = "Guest"
   session.canProduce = false
+  session.canSeeCost = false
   session.canEnter = false
   session.initialized = true
 }

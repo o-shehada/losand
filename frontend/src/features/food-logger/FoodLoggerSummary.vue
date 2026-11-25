@@ -30,7 +30,14 @@ async function save() {
     // reflected without requiring a hard reload.
     await refreshSession()
     if (!session.canProduce) return
-    const result = await call("losand.api.manufacture.submit_batch", { payload: draft })
+    const result = await call("losand.api.manufacture.submit_batch", {
+      payload: {
+        ...draft,
+        product_waste: draft.finished_products
+          .filter((f) => Number(f.waste) > 0)
+          .map((f) => ({ item_code: f.item_code, qty: Number(f.waste), reason: f.waste_reason })),
+      },
+    })
     sessionStorage.setItem("foodLoggerSuccess", JSON.stringify(result))
     sessionStorage.removeItem("foodLoggerDraft")
     router.push("/food-logger/success")
@@ -61,7 +68,7 @@ onUnmounted(() => clearInterval(timer))
     <header class="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
       <div class="bg-primary px-6 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center"><i class="fa-solid fa-industry text-white text-base"></i></div>
+          <img :src="'/assets/losand/images/losand-logo.jpg'" alt="Los Andalos" class="w-10 h-10 rounded-xl bg-white object-contain p-0.5" />
           <div><p class="text-white/70 text-xs font-medium">نظام إدارة الإنتاج</p><p class="text-white font-bold text-sm">{{ factoryName }}</p></div>
         </div>
         <div class="flex items-center gap-4">
@@ -83,8 +90,8 @@ onUnmounted(() => clearInterval(timer))
       <section class="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">القطع المنتجة</p><p class="text-2xl font-black">{{ totals.totalPieces }}</p></div>
         <div class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">إجمالي الوزن</p><p class="text-2xl font-black">{{ fmt1(totals.W) }}<span class="text-sm"> جم</span></p></div>
-        <div class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">تكلفة المواد والفاقد (C)</p><p class="text-2xl font-black text-primary">{{ fmt(totals.C) }}</p></div>
-        <div class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">التكلفة/جرام</p><p class="text-2xl font-black">{{ fmt(totals.costPerG) }}</p></div>
+        <div v-if="session.canSeeCost" class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">تكلفة المواد والفاقد (C)</p><p class="text-2xl font-black text-primary">{{ fmt(totals.C) }}</p></div>
+        <div v-if="session.canSeeCost" class="bg-white rounded-2xl border border-border p-4 text-center"><p class="text-xs text-muted mb-1">التكلفة/جرام</p><p class="text-2xl font-black">{{ fmt(totals.costPerG) }}</p></div>
       </section>
 
       <!-- Finished products w/ allocated cost -->
@@ -98,7 +105,7 @@ onUnmounted(() => clearInterval(timer))
             <div class="col-span-5 font-semibold text-sm">{{ f.name }}</div>
             <div class="col-span-2 text-center text-sm font-bold">{{ f.qty }}</div>
             <div class="col-span-2 text-center text-sm text-muted">{{ f.weight }} جم</div>
-            <div class="col-span-3 text-center text-sm font-bold text-primary">{{ fmt(f.weight * totals.costPerG) }} {{ cur }}</div>
+            <div v-if="session.canSeeCost" class="col-span-3 text-center text-sm font-bold text-primary">{{ fmt(f.weight * totals.costPerG) }} {{ cur }}</div>
           </div>
         </div>
       </section>
@@ -111,10 +118,10 @@ onUnmounted(() => clearInterval(timer))
           <div v-for="(m, i) in usedMaterials" :key="m.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < usedMaterials.length - 1 ? 'border-b border-border' : ''">
             <div class="col-span-6 font-semibold text-sm">{{ m.name_ar }}</div>
             <div class="col-span-2 text-center text-sm">{{ m.qty }} {{ m.unit }}</div>
-            <div class="col-span-2 text-center text-sm text-muted">{{ fmt(m.rate) }}</div>
-            <div class="col-span-2 text-center text-sm font-bold">{{ fmt(m.qty * m.rate) }}</div>
+            <div v-if="session.canSeeCost" class="col-span-2 text-center text-sm text-muted">{{ fmt(m.rate) }}</div>
+            <div v-if="session.canSeeCost" class="col-span-2 text-center text-sm font-bold">{{ fmt(m.qty * m.rate) }}</div>
           </div>
-          <div class="bg-primary-light px-4 py-3 flex items-center justify-between border-t-2 border-primary/20"><span class="text-sm font-bold text-primary">إجمالي تكلفة المواد والفاقد</span><span class="text-base font-black text-primary">{{ fmt(totals.C) }} {{ cur }}</span></div>
+          <div v-if="session.canSeeCost" class="bg-primary-light px-4 py-3 flex items-center justify-between border-t-2 border-primary/20"><span class="text-sm font-bold text-primary">إجمالي تكلفة المواد والفاقد</span><span class="text-base font-black text-primary">{{ fmt(totals.C) }} {{ cur }}</span></div>
         </div>
       </section>
 
@@ -126,8 +133,8 @@ onUnmounted(() => clearInterval(timer))
           <div v-for="(l, i) in lossMaterials" :key="l.item_code || i" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < lossMaterials.length - 1 ? 'border-b border-border' : ''">
             <div class="col-span-6 font-semibold text-sm">{{ l.name_ar || l.item_name || l.item_code }}</div>
             <div class="col-span-2 text-center text-sm">{{ l.qty }} {{ l.unit }}</div>
-            <div class="col-span-2 text-center text-sm text-muted">{{ fmt(l.rate) }}</div>
-            <div class="col-span-2 text-center text-sm font-bold text-warning">{{ fmt(l.qty * l.rate) }}</div>
+            <div v-if="session.canSeeCost" class="col-span-2 text-center text-sm text-muted">{{ fmt(l.rate) }}</div>
+            <div v-if="session.canSeeCost" class="col-span-2 text-center text-sm font-bold text-warning">{{ fmt(l.qty * l.rate) }}</div>
           </div>
         </div>
       </section>

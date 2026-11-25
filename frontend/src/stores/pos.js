@@ -1,5 +1,5 @@
 import { reactive } from "vue"
-import { checkOpeningShift, getPosConfig, getPosExtras } from "@/lib/api"
+import { checkOpeningShift, getPosConfig, getPosExtras, getPosNotes } from "@/lib/api"
 
 // POS session state: the open shift + POS Profile config + add-on catalog, loaded
 // once per full-page load and reused by the router guard, opening screen, register,
@@ -8,6 +8,8 @@ export const pos = reactive({
   config: null, // { pos_profile, company, currency, currency_symbol, price_list, payments, ... }
   shift: null, // open POS Opening Entry, or null
   extras: [], // add-on Items [{ id, item_code, name, price }] — empty if not set up
+  notes: [], // free kitchen notes from the Los Andalus Kitchen Note doctype
+  incoming: 0, // transfers waiting to be received — drives the sidebar badge
   ready: false,
 })
 
@@ -16,6 +18,7 @@ export async function ensurePos() {
   pos.config = await getPosConfig().catch(() => null)
   pos.shift = await checkOpeningShift().catch(() => null)
   pos.extras = (await getPosExtras().catch(() => [])) || []
+  pos.notes = (await getPosNotes().catch(() => [])) || []
   pos.ready = true
 }
 

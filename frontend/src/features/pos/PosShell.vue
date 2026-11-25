@@ -1,5 +1,8 @@
 <script setup>
+import { ref, watch, onMounted, onUnmounted } from "vue"
 import { useRoute, useRouter } from "vue-router"
+import { listIncomingTransfers } from "@/lib/api"
+import { pos } from "@/stores/pos"
 import { session, signOut } from "@/stores/session"
 import "./pos.css"
 
@@ -17,6 +20,19 @@ const navItems = [
   { name: "pos-settings", to: "/settings", icon: "fa-gear", label: "الإعدادات" },
 ]
 
+// Badge on استلام الطلبات: transfers waiting to be received. Refreshed on every
+// navigation (so confirming one clears it) and once a minute for new arrivals.
+async function refreshIncoming() {
+  pos.incoming = (await listIncomingTransfers().catch(() => ({ transfers: [] }))).transfers.length
+}
+let timer
+onMounted(() => {
+  refreshIncoming()
+  timer = setInterval(refreshIncoming, 60000)
+})
+onUnmounted(() => clearInterval(timer))
+watch(() => route.fullPath, refreshIncoming)
+
 async function logout() {
   await signOut()
   router.replace("/login")
@@ -27,8 +43,8 @@ async function logout() {
   <div class="pos-root flex flex-row-reverse w-full bg-pos-canvas" dir="rtl" style="height: 100dvh; overflow: hidden">
     <!-- Sidebar nav (RTL → sits on the right) -->
     <aside class="flex flex-col items-center bg-pos-sidebar w-16 md:w-20 py-4 gap-2 border-l border-pos-border flex-shrink-0 relative z-20">
-      <div class="w-10 h-10 md:w-12 md:h-12 bg-pos-brand rounded-xl2 flex items-center justify-center mb-3 shadow-md">
-        <i class="fa-solid fa-utensils text-white text-base md:text-lg"></i>
+      <div class="w-10 h-10 md:w-12 md:h-12 bg-white rounded-xl2 flex items-center justify-center mb-3 shadow-md overflow-hidden">
+        <img :src="'/assets/losand/images/losand-logo.jpg'" alt="Los Andalos" class="w-full h-full object-contain p-0.5" />
       </div>
       <div class="flex flex-col gap-2 w-full px-2 mt-2">
         <RouterLink
@@ -38,7 +54,10 @@ async function logout() {
           class="pos-nav-item flex flex-col items-center justify-center gap-1 rounded-xl2 py-3 px-1 min-h-[56px] hover:bg-pos-brand-light"
           :class="route.name === item.name ? 'active' : 'text-pos-muted'"
         >
-          <i class="fa-solid text-lg" :class="item.icon"></i>
+          <span class="relative">
+            <i class="fa-solid text-lg" :class="item.icon"></i>
+            <span v-if="item.name === 'pos-receiving' && pos.incoming" data-testid="incoming-badge" class="absolute -top-2 -left-3 min-w-[16px] h-4 px-1 rounded-full bg-pos-danger text-white text-[10px] font-extrabold flex items-center justify-center">{{ pos.incoming }}</span>
+          </span>
           <span class="text-[9px] font-bold leading-tight">{{ item.label }}</span>
         </RouterLink>
       </div>

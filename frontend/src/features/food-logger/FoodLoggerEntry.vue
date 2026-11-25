@@ -25,7 +25,8 @@ const producedAny = computed(() => draft.finished_products.some((f) => Number(f.
 const rawAny = computed(() => draft.raw_materials.some((m) => Number(m.qty) > 0))
 const lossByItem = computed(() => Object.fromEntries((draft.losses || []).map((l) => [l.item_code, Number(l.qty) || 0])))
 const stockIssues = computed(() => draft.raw_materials.filter((m) => (Number(m.qty) || 0) + (lossByItem.value[m.item_code] || 0) > Number(m.available || 0)))
-const canContinue = computed(() => producedAny.value && rawAny.value && stockIssues.value.length === 0)
+const wasteTooHigh = computed(() => draft.finished_products.some((f) => Number(f.waste) > Number(f.qty)))
+const canContinue = computed(() => producedAny.value && rawAny.value && stockIssues.value.length === 0 && !wasteTooHigh.value)
 
 function syncLossRows(raws = []) {
   const existing = Object.fromEntries((draft.losses || []).map((l) => [l.item_code, l]))
@@ -105,7 +106,7 @@ onUnmounted(() => clearInterval(timer))
     <header class="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
       <div class="bg-primary px-6 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center"><i class="fa-solid fa-industry text-white text-base"></i></div>
+          <img :src="'/assets/losand/images/losand-logo.jpg'" alt="Los Andalos" class="w-10 h-10 rounded-xl bg-white object-contain p-0.5" />
           <div>
             <p class="text-white/70 text-xs font-medium">نظام إدارة الإنتاج</p>
             <p class="text-white font-bold text-sm">{{ factoryName }}</p>
@@ -158,7 +159,7 @@ onUnmounted(() => clearInterval(timer))
               <div class="col-span-5">المادة الخام</div>
               <div class="col-span-2 text-center">الوحدة</div>
               <div class="col-span-3 text-center">الكمية المستهلكة</div>
-              <div class="col-span-2 text-center">الإجمالي</div>
+              <div v-if="session.canSeeCost" class="col-span-2 text-center">الإجمالي</div>
             </div>
             <div v-for="(m, i) in draft.raw_materials" :key="m.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < draft.raw_materials.length - 1 ? 'border-b border-border' : ''">
               <div class="col-span-5">
@@ -169,9 +170,9 @@ onUnmounted(() => clearInterval(timer))
               <div class="col-span-3 flex justify-center">
                 <input type="number" min="0" v-model.number="m.qty" class="w-24 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none" :class="(Number(m.qty) || 0) + (lossByItem[m.item_code] || 0) > Number(m.available || 0) ? 'border-danger/60 bg-red-50 text-danger focus:border-danger' : 'border-border focus:border-primary'" />
               </div>
-              <div class="col-span-2 text-center text-sm font-bold">{{ fmt((Number(m.qty) || 0) * (Number(m.rate) || 0)) }} {{ cur }}</div>
+              <div v-if="session.canSeeCost" class="col-span-2 text-center text-sm font-bold">{{ fmt((Number(m.qty) || 0) * (Number(m.rate) || 0)) }} {{ cur }}</div>
             </div>
-            <div class="bg-slate-50 border-t-2 border-border px-4 py-3 flex items-center justify-between">
+            <div v-if="session.canSeeCost" class="bg-slate-50 border-t-2 border-border px-4 py-3 flex items-center justify-between">
               <span class="text-xs text-muted">إجمالي تكلفة المواد والفاقد (C)</span>
               <span class="text-sm font-bold text-primary">{{ fmt(totals.C) }} {{ cur }}</span>
             </div>
@@ -191,7 +192,7 @@ onUnmounted(() => clearInterval(timer))
               <div class="col-span-5">المادة الخام</div>
               <div class="col-span-2 text-center">الوحدة</div>
               <div class="col-span-3 text-center">كمية الفاقد</div>
-              <div class="col-span-2 text-center">الإجمالي</div>
+              <div v-if="session.canSeeCost" class="col-span-2 text-center">الإجمالي</div>
             </div>
             <div v-for="(l, i) in draft.losses" :key="l.item_code" class="grid grid-cols-12 px-4 py-3 items-center bg-amber-50/30" :class="i < draft.losses.length - 1 ? 'border-b border-border' : ''">
               <div class="col-span-5">
@@ -202,7 +203,7 @@ onUnmounted(() => clearInterval(timer))
               <div class="col-span-3 flex justify-center">
                 <input type="number" min="0" step="0.1" v-model.number="l.qty" class="w-24 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none" :class="(Number(l.qty) || 0) + (Number(draft.raw_materials.find((m) => m.item_code === l.item_code)?.qty) || 0) > Number(l.available || 0) ? 'border-danger/60 bg-red-50 text-danger focus:border-danger' : 'border-amber-200 bg-white focus:border-warning'" />
               </div>
-              <div class="col-span-2 text-center text-sm font-bold text-warning">{{ fmt((Number(l.qty) || 0) * (Number(l.rate) || 0)) }} {{ cur }}</div>
+              <div v-if="session.canSeeCost" class="col-span-2 text-center text-sm font-bold text-warning">{{ fmt((Number(l.qty) || 0) * (Number(l.rate) || 0)) }} {{ cur }}</div>
             </div>
           </div>
         </section>
@@ -231,6 +232,26 @@ onUnmounted(() => clearInterval(timer))
           </div>
         </section>
 
+        <!-- Finished-product waste (الهالك): produced items spoiled during the run -->
+        <section v-if="producedAny" class="mb-6" data-testid="product-waste">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-8 h-8 bg-warning rounded-lg flex items-center justify-center"><i class="fa-solid fa-trash-can text-white text-sm"></i></div>
+            <h2 class="text-base font-bold">الهالك <span class="text-xs text-muted font-normal">(المنتجات النهائية — اختياري)</span></h2>
+            <div class="flex-1 h-px bg-border"></div>
+          </div>
+          <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+            <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted">
+              <div class="col-span-4">المنتج</div><div class="col-span-2 text-center">الوحدة</div><div class="col-span-3 text-center">الكمية الهالكة</div><div class="col-span-3 text-center">السبب</div>
+            </div>
+            <div v-for="f in draft.finished_products.filter((x) => Number(x.qty) > 0)" :key="'w' + f.item_code" class="grid grid-cols-12 px-4 py-3 items-center border-b border-border last:border-b-0 bg-amber-50/30">
+              <div class="col-span-4 font-semibold text-sm">{{ f.name }}</div>
+              <div class="col-span-2 text-center"><span class="bg-amber-100 text-amber-700 text-xs font-medium px-2 py-1 rounded-md">قطعة</span></div>
+              <div class="col-span-3 flex justify-center"><input type="number" min="0" :max="f.qty" step="1" v-model.number="f.waste" :data-testid="'waste-' + f.item_code" class="w-24 text-center text-sm font-semibold border-2 rounded-lg py-1.5 px-2 focus:outline-none" :class="Number(f.waste) > Number(f.qty) ? 'border-danger/60 bg-red-50 text-danger' : 'border-border focus:border-warning'" /></div>
+              <div class="col-span-3"><input type="text" v-model="f.waste_reason" placeholder="مثال: سقطت على الأرض" class="w-full text-xs border-2 border-border rounded-lg py-1.5 px-2 focus:outline-none focus:border-warning" /></div>
+            </div>
+          </div>
+        </section>
+
         <!-- Notes -->
         <section class="mb-6">
           <div class="bg-white rounded-2xl border border-border shadow-sm p-4">
@@ -246,7 +267,7 @@ onUnmounted(() => clearInterval(timer))
       <div class="max-w-4xl mx-auto px-4 md:px-6 py-3">
         <div class="flex items-center gap-3 mb-3">
           <div class="flex-1 grid grid-cols-3 gap-3">
-            <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border"><p class="text-xs text-muted mb-0.5">تكلفة المواد والفاقد (C)</p><p class="text-sm font-bold">{{ fmt(totals.C) }} {{ cur }}</p></div>
+            <div v-if="session.canSeeCost" class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border"><p class="text-xs text-muted mb-0.5">تكلفة المواد والفاقد (C)</p><p class="text-sm font-bold">{{ fmt(totals.C) }} {{ cur }}</p></div>
             <div class="bg-slate-50 rounded-xl px-3 py-2 text-center border border-border"><p class="text-xs text-muted mb-0.5">إجمالي الوزن</p><p class="text-sm font-bold">{{ fmt1(totals.W) }} جم</p></div>
             <div class="bg-primary-light rounded-xl px-3 py-2 text-center border border-primary/20"><p class="text-xs text-primary mb-0.5">القطع المنتجة</p><p class="text-sm font-bold text-primary">{{ totals.totalPieces }}</p></div>
           </div>

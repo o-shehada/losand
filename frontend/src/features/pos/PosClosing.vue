@@ -79,6 +79,13 @@ function newShift() {
             </span>
           </div>
         </div>
+<div v-if="result?.stock" class="mt-4 bg-pos-canvas border border-pos-border rounded-xl px-3 py-2.5 text-sm flex flex-col gap-1.5" data-testid="shift-stock">
+          <div class="flex items-center justify-between"><span class="font-bold text-gray-700">الجرد اليومي</span>
+            <span v-if="result?.stock.counted" class="text-pos-green font-extrabold text-xs"><i class="fa-solid fa-circle-check ml-1"></i>تم · {{ ar(result?.stock.variance_items) }} صنف بفرق</span>
+            <RouterLink v-else to="/stocktake" class="text-pos-danger font-extrabold text-xs underline">لم يتم — أكمل الجرد قبل الإغلاق</RouterLink></div>
+          <div class="flex items-center justify-between text-xs text-pos-muted font-semibold"><span>نقص الجرد (صافي)</span><span>{{ money(result?.stock.shortage_value - result?.stock.surplus_value) }}</span></div>
+          <div class="flex items-center justify-between text-xs text-pos-muted font-semibold"><span>الهالك</span><span>{{ money(result?.stock.waste_value) }}</span></div>
+        </div>
         <button @click="newShift" class="pos-btn w-full mt-5 bg-pos-brand text-white font-extrabold text-sm py-3 rounded-xl min-h-[48px] hover:bg-pos-brand-dark transition-colors shadow-md shadow-pos-brand/25">بدء وردية جديدة</button>
       </template>
 
@@ -89,6 +96,13 @@ function newShift() {
           <span class="text-lg font-extrabold text-pos-brand-dark">{{ money(summary?.sales_total || 0) }} <span class="text-xs text-pos-muted font-semibold">({{ ar(summary?.invoice_count || 0) }} فاتورة)</span></span>
         </div>
 
+<div v-if="summary?.stock" class="mb-4 bg-pos-canvas border border-pos-border rounded-xl px-3 py-2.5 text-sm flex flex-col gap-1.5" data-testid="shift-stock">
+          <div class="flex items-center justify-between"><span class="font-bold text-gray-700">الجرد اليومي</span>
+            <span v-if="summary?.stock.counted" class="text-pos-green font-extrabold text-xs"><i class="fa-solid fa-circle-check ml-1"></i>تم · {{ ar(summary?.stock.variance_items) }} صنف بفرق</span>
+            <RouterLink v-else to="/stocktake" class="text-pos-danger font-extrabold text-xs underline">لم يتم — أكمل الجرد قبل الإغلاق</RouterLink></div>
+          <div class="flex items-center justify-between text-xs text-pos-muted font-semibold"><span>نقص الجرد (صافي)</span><span>{{ money(summary?.stock.shortage_value - summary?.stock.surplus_value) }}</span></div>
+          <div class="flex items-center justify-between text-xs text-pos-muted font-semibold"><span>الهالك</span><span>{{ money(summary?.stock.waste_value) }}</span></div>
+        </div>
         <p class="text-xs font-extrabold text-gray-700 mb-2 pr-2 border-r-4 border-pos-brand">جرد الصندوق حسب طريقة الدفع</p>
         <div class="flex flex-col gap-2 mb-4">
           <div class="grid grid-cols-12 gap-2 px-1 text-[10px] font-extrabold text-pos-muted">
@@ -103,11 +117,20 @@ function newShift() {
           <p v-if="!(summary?.reconciliation || []).length" class="text-center text-pos-muted text-xs font-semibold py-4">لا توجد حركات في هذه الوردية</p>
         </div>
 
+        <!-- Count not done: say it up front, in Arabic, and block the button (the server refuses too). -->
+        <div v-if="summary && !summary.stock.counted" data-testid="count-required" class="mb-3 flex items-center gap-3 bg-pos-amber-light border border-pos-amber/30 rounded-xl px-4 py-3">
+          <div class="w-9 h-9 bg-pos-amber rounded-lg flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-clipboard-check text-white text-sm"></i></div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-extrabold text-gray-800 leading-tight">أكمل الجرد اليومي أولاً</p>
+            <p class="text-[11px] text-pos-muted font-semibold">لا يمكن إغلاق الوردية قبل جرد مخزون الفرع.</p>
+          </div>
+          <RouterLink to="/stocktake" class="pos-btn bg-pos-amber text-white text-xs font-extrabold px-3 py-2 rounded-lg min-h-[36px] flex items-center whitespace-nowrap">اذهب إلى الجرد</RouterLink>
+        </div>
         <p v-if="error" class="text-xs text-pos-danger font-bold mb-3 text-center">{{ error }}</p>
 
         <div class="flex gap-2">
           <button @click="router.back()" class="flex-1 bg-pos-canvas border border-pos-border text-gray-600 font-bold text-sm py-3 rounded-xl min-h-[48px] hover:border-pos-brand hover:text-pos-brand transition-colors">رجوع</button>
-          <button @click="close" :disabled="submitting" class="pos-btn flex-[2] bg-pos-amber text-white font-extrabold text-sm py-3 rounded-xl min-h-[48px] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md disabled:opacity-40">
+          <button @click="close" :disabled="submitting || (summary && !summary.stock.counted)" class="pos-btn flex-[2] bg-pos-amber text-white font-extrabold text-sm py-3 rounded-xl min-h-[48px] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md disabled:opacity-40">
             <i class="fa-solid text-sm" :class="submitting ? 'fa-spinner fa-spin' : 'fa-lock'"></i> {{ submitting ? "جارٍ الإغلاق…" : "تأكيد إغلاق الوردية" }}
           </button>
         </div>

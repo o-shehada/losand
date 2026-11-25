@@ -1,9 +1,9 @@
 <script setup>
 import { ref, computed } from "vue"
-import { NOTES } from "./data"
 import { pos } from "@/stores/pos"
 
-const EXTRAS = computed(() => pos.extras)
+const NOTES = computed(() => pos.notes)
+
 const money = (value) =>
   `${Number(value || 0).toFixed(2)} ${pos.config?.currency_symbol || pos.config?.currency || "د.ل"}`
 
@@ -12,10 +12,13 @@ const money = (value) =>
 // the parent decides what to do with the emitted result.
 const props = defineProps({
   title: { type: String, required: true },
+  category: { type: String, default: "" }, // the item's group: add-ons restricted to other groups are hidden
   extras: { type: Array, default: () => [] }, // seed: selected extra objects
   notes: { type: Array, default: () => [] }, // seed: selected note strings
 })
 const emit = defineEmits(["done", "close"])
+// Add-on with no groups = offered on any item; unknown item group = no restriction to apply.
+const EXTRAS = computed(() => pos.extras.filter((e) => !e.groups?.length || !props.category || e.groups.includes(props.category)))
 
 // Local draft — nothing leaves until "تم".
 const selExtras = ref(props.extras.map((e) => e.id))

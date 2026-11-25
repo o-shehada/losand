@@ -55,6 +55,10 @@ export async function getPosProducts(params = {}) {
   return call("losand.api.pos.get_products", params)
 }
 
+export async function getPosNotes() {
+  return call("losand.api.pos.get_notes")
+}
+
 export async function getPosExtras() {
   return call("losand.api.pos.get_extras")
 }

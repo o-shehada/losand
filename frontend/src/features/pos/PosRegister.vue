@@ -122,6 +122,7 @@ function add(product) {
       available_qty: product.available_qty,
       uom: product.uom,
       is_stock_item: product.is_stock_item,
+      category: product.category,
       pieces: [emptyPiece()],
     })
   }
@@ -474,13 +475,14 @@ const expanded = reactive({})
 const toggleExpand = (id) => (expanded[id] = !expanded[id])
 
 // Customization sheet — one sheet, parent decides how to apply the result.
-const sheet = reactive({ open: false, title: "", extras: [], notes: [], apply: null })
+const sheet = reactive({ open: false, title: "", category: "", extras: [], notes: [], apply: null })
 function openLineCustomize(line) {
   // ponytail: whole-line edit seeds from piece #1 and OVERWRITES every piece on
   // done (bulk apply). Same path serves "دمج التخصيص" collapsing per-piece edits
   // back to one uniform set. Split whole-line vs per-piece intent when the
   // kitchen actually needs the distinction.
   const seed = line.pieces[0]
+  sheet.category = line.category
   sheet.title = "تخصيص الصنف"
   sheet.extras = seed.extras
   sheet.notes = seed.notes
@@ -493,6 +495,7 @@ function openLineCustomize(line) {
 }
 function openPieceCustomize(line, i) {
   const p = line.pieces[i]
+  sheet.category = line.category
   sheet.title = `تخصيص — قطعة ${ar(i + 1)}`
   sheet.extras = p.extras
   sheet.notes = p.notes
@@ -864,6 +867,7 @@ function sheetDone(res) {
   <PosCustomizeSheet
     v-if="sheet.open"
     :title="sheet.title"
+    :category="sheet.category"
     :extras="sheet.extras"
     :notes="sheet.notes"
     @done="sheetDone"
