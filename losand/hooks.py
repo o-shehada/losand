@@ -106,6 +106,7 @@ website_route_rules = [
 after_migrate = [
 	"losand.setup.arabic_translations.run",
 	"losand.setup.pos_profile_fields.run",
+	"losand.setup.pos_notes_addons.run",
 	"losand.setup.branch_dimension.run",
 	"losand.setup.upload_wiki_images.run",
 	"losand.setup.publish_manufacturing_wiki.run",
@@ -258,7 +259,7 @@ fixtures = [
 
 # Request Events
 # ----------------
-# before_request = ["losand.utils.before_request"]
+before_request = ["losand.utils.portal_lang"]
 # after_request = ["losand.utils.after_request"]
 
 # Job Events

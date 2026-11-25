@@ -67,7 +67,7 @@ def _require_workbench_access(workbench):
 		frappe.throw(_("You are not assigned to this workbench."), frappe.PermissionError)
 
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)  # the portals ask this first to learn whether anyone is logged in
 def get_current_session():
 	return {
 		"user": frappe.session.user,
@@ -75,6 +75,7 @@ def get_current_session():
 		"language": frappe.local.lang or "ar",
 		"can_produce": can_produce(),
 		"can_enter": can_enter(),
+		"can_see_cost": can_produce(),  # rates/costs: supervisors and managers only
 	}
 
 
@@ -164,7 +165,7 @@ def get_final_products(category):
 			"weight": float(i.weight_per_unit or 0),
 			"weight_uom": i.weight_uom,
 			"image": i.image,
-			"rate": float(i.valuation_rate or 0),
+			"rate": float(i.valuation_rate or 0) if can_produce() else 0.0,
 		}
 		for i in items
 	]
@@ -226,7 +227,7 @@ def get_category_raw_materials(category, warehouse=None):
 			"name_en": html.unescape(frappe.utils.strip_html(i.description or "")).strip(),
 			"unit": i.stock_uom,
 			# last receipt rate into the warehouse, fall back to item master rate
-			"rate": float(_last_receipt_rate(i.item_code, warehouse) or i.valuation_rate or 0),
+			"rate": float(_last_receipt_rate(i.item_code, warehouse) or i.valuation_rate or 0) if can_produce() else 0.0,
 			"available_qty": float(bin_map.get(i.item_code, {}).get("qty") or 0),
 		}
 		for i in items
@@ -453,8 +454,30 @@ def submit_batch(payload, totals=None):
 		frappe.throw(_("Enter at least one raw material consumed"))
 	if not batch.outputs:
 		frappe.throw(_("Enter at least one finished product"))
+	batch.cost_center = wb.get("cost_center")
+	# Finished-product waste (الهالك): a produced item spoiled during the run. Received
+	# then written off, so it can never exceed what this batch produced.
+	produced = {o.item_code: flt(o.qty) for o in batch.outputs}
+	waste = {}
+	for w in payload.get("product_waste") or []:
+		code, qty = w.get("item_code"), flt(w.get("qty"))
+		if not code or qty <= 0:
+			continue
+		if code not in produced:
+			frappe.throw(_("Waste item {0} is not one of the produced items.").format(code))
+		waste[code] = waste.get(code, 0) + qty
+		batch.append("product_waste", {"item_code": code, "item_name": frappe.db.get_value("Item", code, "item_name"), "qty": qty, "unit": frappe.db.get_value("Item", code, "stock_uom"), "reason": w.get("reason")})
+	for code, qty in waste.items():
+		if qty > produced[code] + 1e-9:
+			frappe.throw(_("Waste of {0} ({1}) exceeds the produced quantity ({2}).").format(code, qty, produced[code]))
 	batch.insert(ignore_permissions=True)
 	material_issue_rows = _material_issue_rows(batch)
+
+	def _stamp_cc(se):
+		"""Production line's Cost Center on every row; none set → ERPNext's default."""
+		if wb.get("cost_center"):
+			for r in se.items:
+				r.cost_center = wb.cost_center
 
 	def _make(ste_type, from_wh=None, to_wh=None):
 		se = frappe.new_doc("Stock Entry")
@@ -476,6 +499,7 @@ def submit_batch(payload, totals=None):
 				row = {"item_code": m.item_code, "qty": q, "s_warehouse": rm_wh, "t_warehouse": wip_wh}
 				row.update(_batch_fields(batch_no))
 				transfer.append("items", row)
+		_stamp_cc(transfer)
 		transfer.insert(ignore_permissions=True)
 		transfer.submit()
 		batch.db_set("transfer_entry", transfer.name)
@@ -488,6 +512,7 @@ def submit_batch(payload, totals=None):
 				row = {"item_code": m.item_code, "qty": q, "s_warehouse": wip_wh, "expense_account": clearing}
 				row.update(_batch_fields(batch_no))
 				issue.append("items", row)
+		_stamp_cc(issue)
 		issue.insert(ignore_permissions=True)
 		issue.submit()
 		issue.reload()
@@ -504,6 +529,7 @@ def submit_batch(payload, totals=None):
 			if frappe.db.get_value("Item", o.item_code, "has_batch_no"):
 				row["use_serial_batch_fields"] = 1
 			receipt.append("items", row)
+		_stamp_cc(receipt)
 		receipt.insert(ignore_permissions=True)
 		receipt.submit()
 		receipt.reload()
@@ -524,6 +550,20 @@ def submit_batch(payload, totals=None):
 			o.db_set("unit_cost", unit_cost)
 			o.db_set("amount", unit_cost * flt(o.qty))
 			o.db_set("batch_no", fg_batch.get(o.item_code))
+		# 4) Finished-product waste: Material Issue out of the FG warehouse (the produced
+		# batch), expensed to the clearing account on the line's Cost Center.
+		if waste:
+			wst = _make("Material Issue", fg_wh, None)
+			for code, qty in waste.items():
+				bn = fg_batch.get(code)
+				row = {"item_code": code, "qty": qty, "s_warehouse": fg_wh, "expense_account": clearing}
+				row.update(_batch_fields(bn))
+				wst.append("items", row)
+			wst.remarks = "هالك إنتاج — " + batch.name
+			_stamp_cc(wst)
+			wst.insert(ignore_permissions=True)
+			wst.submit()
+			batch.db_set("waste_entry", wst.name)
 		batch.db_set("status", "Completed")
 		frappe.db.commit()
 	except Exception:
@@ -538,6 +578,7 @@ def submit_batch(payload, totals=None):
 		"transferEntry": batch.transfer_entry,
 		"issueEntry": batch.issue_entry,
 		"receiptEntry": batch.receipt_entry,
+		"wasteEntry": batch.get("waste_entry"),
 		"totalRawCost": batch.total_raw_cost,
 		"totalOutputWeight": batch.total_output_weight,
 		"draft": payload,

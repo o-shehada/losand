@@ -8,6 +8,7 @@
  "field_order": [
   "workbench_name",
   "product_category",
+  "cost_center",
   "disabled",
   "section_warehouses",
   "raw_material_warehouse",
@@ -21,6 +22,7 @@
  "fields": [
   {"fieldname": "workbench_name", "fieldtype": "Data", "label": "Workbench Name", "reqd": 1, "unique": 1, "in_list_view": 1},
   {"fieldname": "product_category", "fieldtype": "Link", "label": "Product Category", "options": "Product Category", "reqd": 1, "in_list_view": 1, "description": "The product family produced at this workbench (e.g. Chicken Burger)."},
+  {"fieldname": "cost_center", "fieldtype": "Link", "label": "Cost Center", "options": "Cost Center", "description": "Production line cost center: every stock entry this workbench posts is booked to it."},
   {"fieldname": "disabled", "fieldtype": "Check", "label": "Disabled"},
   {"fieldname": "section_warehouses", "fieldtype": "Section Break", "label": "Warehouses"},
   {"fieldname": "raw_material_warehouse", "fieldtype": "Link", "label": "Raw Material Warehouse", "options": "Warehouse", "reqd": 1},

@@ -1,0 +1,34 @@
+{
+ "actions": [],
+ "autoname": "format:STK-{#####}",
+ "creation": "2026-11-25 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["pos_profile", "warehouse", "user", "column_break_1", "counted_items", "variance_items", "shortage_value", "surplus_value", "entries", "details"],
+ "fields": [
+  {"fieldname": "pos_profile", "fieldtype": "Link", "label": "POS Profile", "options": "POS Profile", "in_list_view": 1},
+  {"fieldname": "warehouse", "fieldtype": "Link", "label": "Warehouse", "options": "Warehouse"},
+  {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User"},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"fieldname": "counted_items", "fieldtype": "Int", "label": "Counted Items", "in_list_view": 1},
+  {"fieldname": "variance_items", "fieldtype": "Int", "label": "Items With Variance", "in_list_view": 1},
+  {"fieldname": "shortage_value", "fieldtype": "Currency", "label": "Shortage Value"},
+  {"fieldname": "surplus_value", "fieldtype": "Currency", "label": "Surplus Value"},
+  {"fieldname": "entries", "fieldtype": "Small Text", "label": "Stock Entries"},
+  {"fieldname": "details", "fieldtype": "Long Text", "label": "Details (JSON)"}
+ ],
+ "in_create": 1,
+ "links": [],
+ "modified": "2026-11-25 00:00:00",
+ "module": "Los Andalus App",
+ "name": "Los Andalus Stocktake",
+ "owner": "Administrator",
+ "permissions": [
+  {"read": 1, "report": 1, "role": "System Manager", "export": 1},
+  {"read": 1, "report": 1, "role": "Accounts Manager"},
+  {"read": 1, "report": 1, "role": "POS Manager"}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -73,6 +73,12 @@ def _stamp_branch(doc, profile):
 	branch = profile.get("losand_branch")
 	if branch and doc.meta.has_field("branch") and not doc.get("branch"):
 		doc.branch = branch
+	# The profile's Cost Center owns every line, overriding ERPNext's company default
+	# (one shared "Main"), so branch P&L / variance / waste split per branch. Call this
+	# AFTER the item rows are appended. No cost center on the profile: leave the default.
+	if profile.get("cost_center"):
+		for row in doc.get("items") or []:
+			row.cost_center = profile.cost_center
 	return doc
 
 
@@ -280,7 +286,7 @@ def get_extras(pos_profile=None):
 	items = frappe.get_all(
 		"Item",
 		filters={"item_group": ADDON_GROUP, "disabled": 0, "is_sales_item": 1},
-		fields=["item_code", "item_name", "stock_uom", "is_stock_item"],
+		fields=["item_code", "item_name", "stock_uom", "is_stock_item", "losand_addon_groups"],
 		order_by="item_name asc",
 	)
 	codes = [i.item_code for i in items]
@@ -306,9 +312,18 @@ def get_extras(pos_profile=None):
 				"price": float(price_map.get(item.item_code) or 0),
 				"uom": item.stock_uom,
 				"available_qty": available_qty,
+				# Item Groups this add-on may be sold with; empty = any item.
+				"groups": _expanded_groups("Item Group", [g.strip() for g in (item.losand_addon_groups or "").splitlines() if g.strip()]),
 			}
 		)
 	return extras
+
+
+@frappe.whitelist()
+def get_notes():
+	"""Free kitchen notes (no price, no stock) offered on the customize sheet."""
+	_require_login()
+	return frappe.get_all("Los Andalus Kitchen Note", filters={"enabled": 1}, order_by="note asc", pluck="note")
 
 
 GIFT_MODE = "Gift Card"  # Mode of Payment used to tender a redeemed gift card
@@ -628,6 +643,7 @@ def submit_order(
 
 	si.flags.ignore_permissions = True
 	si.set_missing_values()
+	_stamp_branch(si, p)  # rows exist now: pin the profile's Cost Center on each
 	si.calculate_taxes_and_totals()
 
 	# Payments: gift card is tendered first (min of balance and total), the selected
@@ -781,6 +797,7 @@ def save_stocktake(counts, warehouse=None, pos_profile=None):
 	)
 
 	shortages, surplus = [], []
+	detail = []
 	counted_n = 0
 	for c in counts:
 		code = c.get("item_code") or c.get("id")
@@ -792,33 +809,35 @@ def save_stocktake(counts, warehouse=None, pos_profile=None):
 		counted_n += 1
 		system = flt(frappe.db.get_value("Bin", {"item_code": code, "warehouse": wh}, "actual_qty") or 0)
 		diff = flt(counted) - system
+		detail.append({"item": code, "system": system, "counted": flt(counted), "diff": diff})
 		if abs(diff) < 1e-9:
 			continue
 		(surplus if diff > 0 else shortages).append((code, abs(diff)))
 
 	entries = []
+	short_value = surplus_value = 0.0
 	if shortages:
 		se = frappe.new_doc("Stock Entry")
 		se.stock_entry_type = "Material Issue"
 		se.company = company
 		se.from_warehouse = wh
-		_stamp_branch(se, p)
 		for code, q in shortages:
 			for batch_no, qq in _stock_rows(code, wh, q):
 				row = {"item_code": code, "qty": qq, "s_warehouse": wh, "expense_account": adj}
 				if batch_no:
 					row.update({"use_serial_batch_fields": 1, "batch_no": batch_no})
 				se.append("items", row)
+		_stamp_branch(se, p)
 		se.flags.ignore_permissions = True
 		se.insert(ignore_permissions=True)
 		se.submit()
 		entries.append(se.name)
+		short_value = flt(se.total_amount)
 	if surplus:
 		se = frappe.new_doc("Stock Entry")
 		se.stock_entry_type = "Material Receipt"
 		se.company = company
 		se.to_warehouse = wh
-		_stamp_branch(se, p)
 		for code, q in surplus:
 			row = {"item_code": code, "qty": q, "t_warehouse": wh, "expense_account": adj}
 			rate = _last_receipt_rate(code, wh)
@@ -827,13 +846,31 @@ def save_stocktake(counts, warehouse=None, pos_profile=None):
 			if frappe.db.get_value("Item", code, "has_batch_no"):
 				row["use_serial_batch_fields"] = 1
 			se.append("items", row)
+		_stamp_branch(se, p)
 		se.flags.ignore_permissions = True
 		se.insert(ignore_permissions=True)
 		se.submit()
 		entries.append(se.name)
+		surplus_value = flt(se.total_amount)
 
-	if not entries:
-		frappe.throw(_("No stock differences to post."))
+	if not counted_n:
+		frappe.throw(_("Nothing was counted."))
+	# The count itself is the record the shift close checks for — a perfect count
+	# (no differences, no Stock Entry) must still count as done.
+	frappe.get_doc(
+		{
+			"doctype": "Los Andalus Stocktake",
+			"pos_profile": p.name,
+			"warehouse": wh,
+			"user": frappe.session.user,
+			"counted_items": counted_n,
+			"variance_items": len(shortages) + len(surplus),
+			"shortage_value": short_value,
+			"surplus_value": surplus_value,
+			"entries": ", ".join(entries),
+			"details": json.dumps(detail, ensure_ascii=False),
+		}
+	).insert(ignore_permissions=True)
 	frappe.db.commit()
 	return {"entries": entries, "counted": counted_n}
 
@@ -880,7 +917,6 @@ def save_waste(items, pos_profile=None):
 	se.stock_entry_type = "Material Issue"
 	se.company = company
 	se.from_warehouse = wh
-	_stamp_branch(se, p)
 	# ponytail: reasons ride in `remarks` — Stock Entry Detail has no per-row reason
 	# field, and one free-text line is enough to answer "why" on the audit trail.
 	if reasons:
@@ -894,6 +930,7 @@ def save_waste(items, pos_profile=None):
 			if batch_no:
 				row.update({"use_serial_batch_fields": 1, "batch_no": batch_no})
 			se.append("items", row)
+	_stamp_branch(se, p)
 	se.flags.ignore_permissions = True
 	se.insert(ignore_permissions=True)
 	se.submit()
@@ -961,12 +998,15 @@ def list_incoming_transfers(pos_profile=None):
 	for row in frappe.get_all(
 		"Stock Entry Detail",
 		filters={"parent": ["in", list(names)], "parenttype": "Stock Entry"},
-		fields=["parent", "qty", "s_warehouse"],
+		fields=["parent", "qty", "s_warehouse", "item_code", "item_name", "uom"],
 	):
-		agg = totals.setdefault(row.parent, {"lines": 0, "qty": 0.0, "source": None})
+		agg = totals.setdefault(row.parent, {"lines": 0, "qty": 0.0, "source": None, "items": []})
 		agg["lines"] += 1
 		agg["qty"] += flt(row.qty)
 		agg["source"] = agg["source"] or row.s_warehouse
+		agg["items"].append(
+			{"id": row.item_code, "name": row.item_name or row.item_code, "qty": flt(row.qty), "uom": row.uom, "from": row.s_warehouse}
+		)
 	return {
 		"warehouse": wh,
 		"transfers": [
@@ -978,6 +1018,7 @@ def list_incoming_transfers(pos_profile=None):
 				"note": e.remarks,
 				"lines": totals.get(e.name, {}).get("lines", 0),
 				"total_qty": totals.get(e.name, {}).get("qty", 0.0),
+				"items": totals.get(e.name, {}).get("items", []),
 			}
 			for e in entries
 		],
@@ -1121,6 +1162,36 @@ def discard_parked(name):
 	return {"name": name}
 
 
+def _shift_stock(opening, start):
+	"""This shift's stock-count and waste figures for the branch: the count rows are
+	our own Stocktake records, waste is the هالك Material Issues posted by the user."""
+	count = frappe.get_all(
+		"Los Andalus Stocktake",
+		filters={"pos_profile": opening.pos_profile, "user": frappe.session.user, "creation": [">=", start]},
+		fields=["name", "variance_items", "shortage_value", "surplus_value"],
+	)
+	wh = frappe.db.get_value("POS Profile", opening.pos_profile, "warehouse")
+	waste = frappe.get_all(
+		"Stock Entry",
+		filters={
+			"docstatus": 1,
+			"purpose": "Material Issue",
+			"from_warehouse": wh,
+			"owner": frappe.session.user,
+			"creation": [">=", start],
+			"remarks": ["like", "هالك%"],
+		},
+		pluck="total_amount",
+	)
+	return {
+		"counted": bool(count),
+		"variance_items": sum(c.variance_items for c in count),
+		"shortage_value": sum(flt(c.shortage_value) for c in count),
+		"surplus_value": sum(flt(c.surplus_value) for c in count),
+		"waste_value": sum(flt(w) for w in waste),
+	}
+
+
 def _shift_reconciliation(shift):
 	"""Aggregate the open shift's POS sales in its time window, per mode of payment:
 	expected = opening float + cash taken. Reconciliation-only — GL/stock already
@@ -1179,6 +1250,7 @@ def get_shift_summary():
 		"sales_total": sales_total,
 		"invoice_count": count,
 		"reconciliation": recon,
+		"stock": _shift_stock(_opening, start),
 		"currency": profile.currency,
 		"currency_symbol": symbol,
 	}
@@ -1197,6 +1269,10 @@ def close_shift(counted=None):
 	if not shift:
 		frappe.throw(_("No open shift."))
 	opening, start, end, sales_total, _count, recon = _shift_reconciliation(shift)
+	stock = _shift_stock(opening, start)
+	# A shift cannot close before the day's stock count (الجرد اليومي) is done.
+	if not stock["counted"]:
+		frappe.throw(_("Complete the daily stock count (الجرد اليومي) before closing the shift."))
 
 	expected_cash = counted_cash = 0.0
 	for r in recon:
@@ -1218,13 +1294,15 @@ def close_shift(counted=None):
 			"expected_cash": expected_cash,
 			"counted_cash": counted_cash,
 			"difference": counted_cash - expected_cash,
+			"stock_variance_value": stock["shortage_value"] - stock["surplus_value"],
+			"waste_value": stock["waste_value"],
 			"reconciliation": json.dumps(recon, ensure_ascii=False),
 		}
 	)
 	doc.flags.ignore_permissions = True
 	doc.insert(ignore_permissions=True)
 	frappe.db.commit()
-	return {"name": doc.name, "sales_total": sales_total, "reconciliation": recon}
+	return {"name": doc.name, "sales_total": sales_total, "reconciliation": recon, "stock": stock}
 
 
 # ---------------------------------------------------------------------------

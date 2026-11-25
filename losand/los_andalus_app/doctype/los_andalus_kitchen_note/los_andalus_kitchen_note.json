@@ -1,0 +1,26 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:note",
+ "creation": "2026-11-25 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["note", "enabled"],
+ "fields": [
+  {"fieldname": "note", "fieldtype": "Data", "label": "Note", "reqd": 1, "unique": 1, "in_list_view": 1, "description": "Free kitchen instruction shown on the POS customize sheet (e.g. no onions). No price, no stock effect."},
+  {"fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "1", "in_list_view": 1}
+ ],
+ "links": [],
+ "modified": "2026-11-25 00:00:00",
+ "module": "Los Andalus App",
+ "name": "Los Andalus Kitchen Note",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "print": 1, "read": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"create": 1, "delete": 1, "read": 1, "role": "POS Manager", "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
