@@ -279,7 +279,7 @@ onUnmounted(() => clearInterval(timer))
           <span v-else>أدخل كمية مادة خام مستهلكة واحدة على الأقل</span>
         </div>
         <button @click="continueToSummary" :disabled="!canContinue" class="w-full flex items-center justify-center gap-3 py-3 bg-primary text-white rounded-xl text-base font-bold hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-          <i class="fa-solid fa-calculator"></i> احسب التكلفة وراجع الملخص <i class="fa-solid fa-arrow-left text-sm"></i>
+          <i class="fa-solid fa-calculator"></i> {{ session.canSeeCost ? "احسب التكلفة وراجع الملخص" : "راجع الملخص" }} <i class="fa-solid fa-arrow-left text-sm"></i>
         </button>
       </div>
     </footer>

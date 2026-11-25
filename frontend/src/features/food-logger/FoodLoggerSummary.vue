@@ -96,10 +96,10 @@ onUnmounted(() => clearInterval(timer))
 
       <!-- Finished products w/ allocated cost -->
       <section class="mb-6">
-        <div class="flex items-center gap-3 mb-4"><div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"><i class="fa-solid fa-box text-white text-sm"></i></div><h2 class="text-base font-bold">المنتجات النهائية وتكلفتها</h2><div class="flex-1 h-px bg-border"></div></div>
+        <div class="flex items-center gap-3 mb-4"><div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"><i class="fa-solid fa-box text-white text-sm"></i></div><h2 class="text-base font-bold">{{ session.canSeeCost ? "المنتجات النهائية وتكلفتها" : "المنتجات النهائية" }}</h2><div class="flex-1 h-px bg-border"></div></div>
         <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
           <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted">
-            <div class="col-span-5">المنتج</div><div class="col-span-2 text-center">الكمية</div><div class="col-span-2 text-center">الوزن</div><div class="col-span-3 text-center">التكلفة/قطعة</div>
+            <div class="col-span-5">المنتج</div><div class="col-span-2 text-center">الكمية</div><div class="col-span-2 text-center">الوزن</div><div v-if="session.canSeeCost" class="col-span-3 text-center">التكلفة/قطعة</div>
           </div>
           <div v-for="(f, i) in producedProducts" :key="f.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < producedProducts.length - 1 ? 'border-b border-border' : ''">
             <div class="col-span-5 font-semibold text-sm">{{ f.name }}</div>
@@ -114,7 +114,7 @@ onUnmounted(() => clearInterval(timer))
       <section class="mb-6">
         <div class="flex items-center gap-3 mb-4"><div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"><i class="fa-solid fa-boxes-stacked text-white text-sm"></i></div><h2 class="text-base font-bold">المواد الخام المستهلكة</h2><div class="flex-1 h-px bg-border"></div></div>
         <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
-          <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted"><div class="col-span-6">المادة</div><div class="col-span-2 text-center">الكمية</div><div class="col-span-2 text-center">السعر</div><div class="col-span-2 text-center">الإجمالي</div></div>
+          <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted"><div class="col-span-6">المادة</div><div class="col-span-2 text-center">الكمية</div><div v-if="session.canSeeCost" class="col-span-2 text-center">السعر</div><div v-if="session.canSeeCost" class="col-span-2 text-center">الإجمالي</div></div>
           <div v-for="(m, i) in usedMaterials" :key="m.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < usedMaterials.length - 1 ? 'border-b border-border' : ''">
             <div class="col-span-6 font-semibold text-sm">{{ m.name_ar }}</div>
             <div class="col-span-2 text-center text-sm">{{ m.qty }} {{ m.unit }}</div>
@@ -129,7 +129,7 @@ onUnmounted(() => clearInterval(timer))
       <section v-if="lossMaterials.length" class="mb-6">
         <div class="flex items-center gap-3 mb-4"><div class="w-8 h-8 bg-warning rounded-lg flex items-center justify-center"><i class="fa-solid fa-arrow-trend-down text-white text-sm"></i></div><h2 class="text-base font-bold">الفاقد</h2><div class="flex-1 h-px bg-border"></div></div>
         <div class="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
-          <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted"><div class="col-span-6">المادة</div><div class="col-span-2 text-center">الكمية</div><div class="col-span-2 text-center">السعر</div><div class="col-span-2 text-center">الإجمالي</div></div>
+          <div class="grid grid-cols-12 bg-slate-50 border-b border-border px-4 py-3 text-xs font-bold text-muted"><div class="col-span-6">المادة</div><div class="col-span-2 text-center">الكمية</div><div v-if="session.canSeeCost" class="col-span-2 text-center">السعر</div><div v-if="session.canSeeCost" class="col-span-2 text-center">الإجمالي</div></div>
           <div v-for="(l, i) in lossMaterials" :key="l.item_code || i" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < lossMaterials.length - 1 ? 'border-b border-border' : ''">
             <div class="col-span-6 font-semibold text-sm">{{ l.name_ar || l.item_name || l.item_code }}</div>
             <div class="col-span-2 text-center text-sm">{{ l.qty }} {{ l.unit }}</div>

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from "vue"
 import { useRouter } from "vue-router"
+import { session } from "@/stores/session"
 import { factoryName, cur } from "@/lib/currency"
 import { calc, fmt, fmt1 } from "./data"
 
@@ -76,7 +77,7 @@ onUnmounted(() => clearInterval(timer))
           <div class="grid grid-cols-3 divide-x divide-x-reverse divide-border border-t border-border">
             <div class="px-4 py-4 text-center"><p class="text-xs text-muted mb-1">القطع المنتجة</p><p class="text-2xl font-black">{{ totals.totalPieces }}</p></div>
             <div class="px-4 py-4 text-center"><p class="text-xs text-muted mb-1">إجمالي الوزن</p><p class="text-2xl font-black">{{ fmt1(totals.W) }}<span class="text-sm"> جم</span></p></div>
-            <div class="px-4 py-4 text-center"><p class="text-xs text-muted mb-1">تكلفة المواد والفاقد</p><p class="text-2xl font-black text-primary">{{ fmt(totals.C) }}</p></div>
+            <div v-if="session.canSeeCost" class="px-4 py-4 text-center"><p class="text-xs text-muted mb-1">تكلفة المواد والفاقد</p><p class="text-2xl font-black text-primary">{{ fmt(totals.C) }}</p></div>
           </div>
         </div>
       </section>
@@ -87,7 +88,7 @@ onUnmounted(() => clearInterval(timer))
           <div v-for="(f, i) in producedProducts" :key="f.item_code" class="grid grid-cols-12 px-4 py-3 items-center" :class="i < producedProducts.length - 1 ? 'border-b border-border' : ''">
             <div class="col-span-6 font-semibold text-sm">{{ f.name }}</div>
             <div class="col-span-2 text-center text-sm font-bold">{{ f.qty }}</div>
-            <div class="col-span-4 text-center text-sm font-bold text-primary">{{ fmt(f.weight * totals.costPerG) }} {{ cur }}</div>
+            <div v-if="session.canSeeCost" class="col-span-4 text-center text-sm font-bold text-primary">{{ fmt(f.weight * totals.costPerG) }} {{ cur }}</div>
           </div>
         </div>
       </section>

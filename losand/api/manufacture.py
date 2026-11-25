@@ -351,7 +351,7 @@ def save_draft(payload):
 	return {
 		"batchName": batch.name,
 		"status": batch.status,
-		"totalRawCost": batch.total_raw_cost,
+		"totalRawCost": batch.total_raw_cost if can_produce() else None,  # cost: producers only
 		"totalOutputWeight": batch.total_output_weight,
 	}
 
