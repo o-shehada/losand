@@ -104,6 +104,7 @@ website_route_rules = [
 # Then (re)publish the manufacturing manual into the Wiki app, if installed: upload the
 # screenshots as Files first, then create/update the Wiki Pages that embed them.
 after_migrate = [
+	"losand.setup.schema_and_dashboards.run",
 	"losand.setup.arabic_translations.run",
 	"losand.setup.pos_profile_fields.run",
 	"losand.setup.pos_notes_addons.run",
@@ -115,38 +116,8 @@ after_migrate = [
 
 # Fixtures
 # --------
-# Custom Fields that travel with the app (applied on every `bench migrate`).
-fixtures = [
-	{
-		"dt": "Custom Field",
-		"filters": [["name", "in", [
-			"Item-is_final_product",
-			"Item-product_category",
-			"Item-is_raw_material",
-			"Item-classification",
-			"Stock Entry-custom_production_batch",
-			"Stock Entry-custom_workbench",
-			"Sales Invoice-losand_pos_request_id",
-			"Sales Invoice Item-losand_kitchen_note",
-		]]],
-	},
-	{
-		"dt": "Number Card",
-		"filters": [["name", "in", [
-			"LA Batches Today",
-			"LA Total Produced",
-			"LA Production Cost",
-			"LA FG Stock Value",
-		]]],
-	},
-	{
-		"dt": "Dashboard Chart",
-		"filters": [["name", "in", [
-			"LA Daily Production",
-			"LA Batches by Status",
-		]]],
-	},
-]
+# None: the app ships no exported data. Custom fields, Number Cards and Dashboard Charts
+# are created from code (losand.setup.schema_and_dashboards, run on every migrate).
 
 # Uninstallation
 # ------------
