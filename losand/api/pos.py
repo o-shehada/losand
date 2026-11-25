@@ -1173,14 +1173,16 @@ def _shift_stock(opening, start):
 	wh = frappe.db.get_value("POS Profile", opening.pos_profile, "warehouse")
 	waste = frappe.get_all(
 		"Stock Entry",
-		filters={
-			"docstatus": 1,
-			"purpose": "Material Issue",
-			"from_warehouse": wh,
-			"owner": frappe.session.user,
-			"creation": [">=", start],
-			"remarks": ["like", "هالك%"],
-		},
+		filters=[
+			["docstatus", "=", 1],
+			["purpose", "=", "Material Issue"],
+			["from_warehouse", "=", wh],
+			["owner", "=", frappe.session.user],
+			["creation", ">=", start],
+			["remarks", "like", "هالك%"],
+			# production waste (هالك إنتاج, posted from the factory) is not branch waste
+			["remarks", "not like", "هالك إنتاج%"],
+		],
 		pluck="total_amount",
 	)
 	return {

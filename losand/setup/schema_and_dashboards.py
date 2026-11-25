@@ -79,11 +79,18 @@ def _card(label, document_type, function, filters, based_on=None):
 
 
 BATCH = "Los Andalus Production Batch"
+POS_TODAY = [
+	["Sales Invoice", "is_pos", "=", 1],
+	["Sales Invoice", "docstatus", "=", 1],
+	["Sales Invoice", "posting_date", "Timespan", "today"],
+]
 NUMBER_CARDS = [
 	_card("LA Batches Today", BATCH, "Count", [[BATCH, "creation", "Timespan", "today"]]),
 	_card("LA Total Produced", BATCH, "Sum", [[BATCH, "status", "=", "Completed"]], "total_produced_qty"),
 	_card("LA Production Cost", BATCH, "Sum", [[BATCH, "status", "=", "Completed"]], "total_raw_cost"),
 	_card("LA FG Stock Value", "Bin", "Sum", [["Bin", "warehouse", "=", "Finished Goods - LA"]], "stock_value"),
+	_card("LA POS Sales Today", "Sales Invoice", "Sum", POS_TODAY, "grand_total"),
+	_card("LA POS Invoices Today", "Sales Invoice", "Count", POS_TODAY),
 ]
 
 DASHBOARD_CHARTS = [
@@ -116,6 +123,23 @@ DASHBOARD_CHARTS = [
 		"time_interval": "Yearly",
 		"timespan": "Last Year",
 		"filters_json": "[]",
+		"is_public": 1,
+		"is_standard": 0,
+	},
+	{
+		"doctype": "Dashboard Chart",
+		"name": "LA Sales by Branch",
+		"chart_name": "LA Sales by Branch",
+		"chart_type": "Group By",
+		"document_type": "Sales Invoice",
+		"group_by_type": "Sum",
+		"group_by_based_on": "pos_profile",  # one profile per branch; always set, unlike the optional Branch dimension
+		"aggregate_function_based_on": "grand_total",
+		"type": "Bar",
+		"timeseries": 0,
+		"time_interval": "Yearly",
+		"timespan": "Last Year",
+		"filters_json": json.dumps([["Sales Invoice", "is_pos", "=", 1], ["Sales Invoice", "docstatus", "=", 1]]),
 		"is_public": 1,
 		"is_standard": 0,
 	},

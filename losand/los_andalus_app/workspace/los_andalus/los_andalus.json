@@ -1,16 +1,12 @@
 {
  "charts": [
   {
-   "chart_name": "LA Daily Production",
-   "label": "LA Daily Production"
-  },
-  {
-   "chart_name": "LA Batches by Status",
-   "label": "LA Batches by Status"
+   "chart_name": "LA Sales by Branch",
+   "label": "LA Sales by Branch"
   }
  ],
- "content": "[{\"id\":\"h1\",\"type\":\"header\",\"data\":{\"text\":\"Los Andalus Manufacture\",\"col\":12}},{\"id\":\"n1\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA Batches Today\",\"col\":3}},{\"id\":\"n2\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA Total Produced\",\"col\":3}},{\"id\":\"n3\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA Production Cost\",\"col\":3}},{\"id\":\"n4\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA FG Stock Value\",\"col\":3}},{\"id\":\"ch1\",\"type\":\"chart\",\"data\":{\"chart_name\":\"LA Daily Production\",\"col\":8}},{\"id\":\"ch2\",\"type\":\"chart\",\"data\":{\"chart_name\":\"LA Batches by Status\",\"col\":4}},{\"id\":\"sp\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"s1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Batches\",\"col\":3}},{\"id\":\"s2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Workbenches\",\"col\":3}},{\"id\":\"s3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Items\",\"col\":3}},{\"id\":\"s4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Balance\",\"col\":3}},{\"id\":\"s5\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Open Production Portal\",\"col\":3}},{\"id\":\"sp2\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Production\",\"col\":4}},{\"id\":\"c2\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"c3\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}},{\"id\":\"c4\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
- "creation": "2026-06-21 18:36:13.000244",
+ "content": "[{\"id\":\"h1\",\"type\":\"header\",\"data\":{\"text\":\"Los Andalus\",\"col\":12}},{\"id\":\"n1\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA POS Sales Today\",\"col\":6}},{\"id\":\"n2\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"LA FG Stock Value\",\"col\":6}},{\"id\":\"ch1\",\"type\":\"chart\",\"data\":{\"chart_name\":\"LA Sales by Branch\",\"col\":12}},{\"id\":\"sp1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"s1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Open POS Portal\",\"col\":3}},{\"id\":\"s2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Open Production Portal\",\"col\":3}},{\"id\":\"s3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Performance\",\"col\":3}},{\"id\":\"s4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cost Center Performance\",\"col\":3}},{\"id\":\"s5\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Items\",\"col\":3}},{\"id\":\"s6\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Warehouses\",\"col\":3}},{\"id\":\"sp2\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Master Data\",\"col\":4}},{\"id\":\"c2\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"c3\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "creation": "2026-07-04 09:07:48.235647",
  "custom_blocks": [],
  "docstatus": 0,
  "doctype": "Workspace",
@@ -18,42 +14,14 @@
  "hide_custom": 0,
  "icon": "retail",
  "idx": 0,
- "indicator_color": "",
+ "indicator_color": "blue",
  "is_hidden": 0,
  "label": "Los Andalus",
  "links": [
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Production",
-   "link_count": 0,
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Production Batch",
-   "link_count": 0,
-   "link_to": "Los Andalus Production Batch",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Stock Entry",
-   "link_count": 0,
-   "link_to": "Stock Entry",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Stock",
+   "label": "Master Data",
    "link_count": 0,
    "onboard": 0,
    "type": "Card Break"
@@ -71,9 +39,29 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Batch",
+   "label": "Item Group",
    "link_count": 0,
-   "link_to": "Batch",
+   "link_to": "Item Group",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item Price",
+   "link_count": 0,
+   "link_to": "Item Price",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Price List",
+   "link_count": 0,
+   "link_to": "Price List",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -91,78 +79,70 @@
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Branch",
+   "link_count": 0,
+   "link_to": "Branch",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Cost Center",
+   "link_count": 0,
+   "link_to": "Cost Center",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Company",
+   "link_count": 0,
+   "link_to": "Company",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock Entry",
+   "link_count": 0,
+   "link_to": "Stock Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Batch",
+   "link_count": 0,
+   "link_to": "Batch",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Stock Reconciliation",
    "link_count": 0,
    "link_to": "Stock Reconciliation",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Setup",
-   "link_count": 0,
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Workbench",
-   "link_count": 0,
-   "link_to": "Workbench",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Product Category",
-   "link_count": 0,
-   "link_to": "Product Category",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Shift",
-   "link_count": 0,
-   "link_to": "Shift",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Manufacture Settings",
-   "link_count": 0,
-   "link_to": "Los Andalus Manufacture Settings",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Item Group",
-   "link_count": 0,
-   "link_to": "Item Group",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Reports",
-   "link_count": 0,
-   "onboard": 0,
-   "type": "Card Break"
   },
   {
    "hidden": 0,
@@ -193,24 +173,84 @@
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Branch Performance",
+   "link_count": 0,
+   "link_to": "Los Andalus Branch Performance",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Cost Center Performance",
+   "link_count": 0,
+   "link_to": "Los Andalus Cost Center Performance",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Production Summary",
+   "link_count": 0,
+   "link_to": "Los Andalus Production Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Count and Waste",
+   "link_count": 0,
+   "link_to": "Los Andalus Stock Count and Waste",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Profit and Loss Statement",
+   "link_count": 0,
+   "link_to": "Profit and Loss Statement",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Sales Register",
+   "link_count": 0,
+   "link_to": "Sales Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-07-04 06:52:40.305969",
+ "modified": "2026-11-26 09:00:00",
  "modified_by": "Administrator",
  "module": "Los Andalus App",
  "name": "Los Andalus",
  "number_cards": [
   {
-   "label": "LA Batches Today",
-   "number_card_name": "LA Batches Today"
-  },
-  {
-   "label": "LA Total Produced",
-   "number_card_name": "LA Total Produced"
-  },
-  {
-   "label": "LA Production Cost",
-   "number_card_name": "LA Production Cost"
+   "label": "LA POS Sales Today",
+   "number_card_name": "LA POS Sales Today"
   },
   {
    "label": "LA FG Stock Value",
@@ -222,24 +262,36 @@
  "public": 1,
  "quick_lists": [],
  "roles": [],
- "sequence_id": 1.0,
+ "sequence_id": 1,
  "shortcuts": [
   {
    "color": "Green",
-   "doc_view": "List",
-   "label": "Production Batches",
-   "link_to": "Los Andalus Production Batch",
-   "type": "DocType"
+   "label": "Open POS Portal",
+   "type": "URL",
+   "url": "/los-andalus/pos/"
+  },
+  {
+   "color": "Cyan",
+   "label": "Open Production Portal",
+   "type": "URL",
+   "url": "/los-andalus/manufacture/"
   },
   {
    "color": "Orange",
-   "doc_view": "List",
-   "label": "Workbenches",
-   "link_to": "Workbench",
-   "type": "DocType"
+   "label": "Branch Performance",
+   "link_to": "Los Andalus Branch Performance",
+   "type": "Report",
+   "report_ref_doctype": "Sales Invoice"
   },
   {
-   "color": "Grey",
+   "color": "Orange",
+   "label": "Cost Center Performance",
+   "link_to": "Los Andalus Cost Center Performance",
+   "type": "Report",
+   "report_ref_doctype": "GL Entry"
+  },
+  {
+   "color": "Blue",
    "doc_view": "List",
    "label": "Items",
    "link_to": "Item",
@@ -247,16 +299,10 @@
   },
   {
    "color": "Blue",
-   "label": "Stock Balance",
-   "link_to": "Stock Balance",
-   "report_ref_doctype": "Stock Ledger Entry",
-   "type": "Report"
-  },
-  {
-   "color": "Cyan",
-   "label": "Open Production Portal",
-   "type": "URL",
-   "url": "/los-andalus/manufacture/"
+   "doc_view": "List",
+   "label": "Warehouses",
+   "link_to": "Warehouse",
+   "type": "DocType"
   }
  ],
  "title": "Los Andalus"

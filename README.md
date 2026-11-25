@@ -64,10 +64,24 @@ ERPNext: Sales Invoice, Stock Entry, POS Profile, Item, Batch, Warehouse, Cost C
 - **Finished-product waste (الهالك)** is a fourth Material Issue out of the finished-goods warehouse, limited to what the run produced.
 - Costs and rates are shown only to Manufacturing Manager, Manufacture Supervisor and System Manager.
 
-### Reporting
+### Workspaces and reports
 
-- **Los Andalus Branch Performance** (Script Report): per day and branch, revenue by payment mode, shift reconciliation, and stock opening, receipts, consumption and closing from the Stock Ledger.
-- **Los Andalus POS Closing** records and **Los Andalus Stocktake** records are viewable in the Desk.
+The Desk has one common workspace with two children (Desk sidebar: **Los Andalus → Manufacture, POS**):
+
+| Workspace | Holds |
+|---|---|
+| **Los Andalus** | Shared master data (Item, Warehouse, Branch, Cost Center…), stock documents, cross-cutting reports, today's POS sales, finished-goods stock value, sales by branch, links to both portals |
+| **Manufacture** | Production Batch, Workbench, Product Category, Shift, Manufacture Settings, production cards and charts, Production Summary report |
+| **POS** | POS Profile, shifts and closings, invoices, parked orders, gift cards, kitchen notes, stock count, POS cards and the sales-by-branch chart |
+
+Custom reports (all Script Reports, Arabic column labels):
+
+| Report | Shows |
+|---|---|
+| **Los Andalus Branch Performance** | Per day and branch: revenue by payment mode, cash reconciliation, stock opening, receipts, consumption and closing |
+| **Los Andalus Cost Center Performance** | Income, expense, net and margin per Cost Center from the GL, so each branch and production line has its own profit and loss |
+| **Los Andalus Production Summary** | Per production batch: pieces, weight, material cost, cost per piece, finished-product waste and its value |
+| **Los Andalus Stock Count and Waste** | Per day and branch: counts done, items with variance, shortage and surplus value, waste value |
 
 ### Cost centers and branches
 
@@ -145,7 +159,7 @@ npm run build               # writes ../losand/public/frontend and the www/*.htm
 
 Commit the rebuilt `losand/public/frontend` and `losand/www/los-andalus/manufacture.html` together; the POS page reads its asset names from `manufacture.html`.
 
-After changing a doctype JSON or adding a patch, run `bench --site your.site migrate`. Cart arithmetic has a small unit test in `frontend/src/features/pos/cartMath.test.js`.
+After changing a doctype JSON or adding a patch, run `bench --site your.site migrate`. Don't force-import a Workspace file with `import_file_by_path(..., force=True)` in developer mode: Frappe deletes the workspace first, which also deletes its folder from the app. Cart arithmetic has a small unit test in `frontend/src/features/pos/cartMath.test.js`.
 
 ## Repository layout
 
@@ -159,7 +173,8 @@ losand/
   api/manufacture.py           production endpoints
   utils.py                     portal API language hook
   los_andalus_app/doctype/     Workbench, Production Batch, Stocktake, POS Closing, Gift Card, Kitchen Note, …
-  los_andalus_app/report/      Branch Performance report
+  los_andalus_app/report/      Branch Performance, Cost Center Performance, Production Summary, Stock Count and Waste
+  los_andalus_app/workspace/   Los Andalus (common), Manufacture and POS workspaces
   setup/                       after_migrate setup: custom fields, dashboards, POS Profile fields, Branch dimension, print formats, wiki (the app ships no fixtures)
   patches/                     one-time data patches
   translations/ar.csv          Arabic strings, including portal error messages
