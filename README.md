@@ -115,7 +115,7 @@ The built frontend is committed (`losand/public/frontend`), so installing needs 
 ## Setup for a new site
 
 1. **Company, warehouses, price list.** Create these in ERPNext as usual. The factory warehouses are `Stores`, `Work In Progress` and `Finished Goods`; defaults live in **Los Andalus Manufacture Settings**.
-2. **A POS Profile per branch.** Set its warehouse, price list, payment methods, item groups and users. Fill the **Branch** (`losand_branch`) and **Cost Center** fields. Add the **POS Add-ons** item group to the profile's item groups if the branch sells add-ons. The optional waste list (`losand_waste_items`) decides what the branch may write off.
+2. **A POS Profile per branch.** Set its warehouse, price list, payment methods, item groups and users (only listed users can open its POS). Fill the **Branch** (`losand_branch`) and **Cost Center** fields. Add the **POS Add-ons** item group to the profile's item groups if the branch sells add-ons. The optional waste list (`losand_waste_items`) decides what the branch may write off.
 3. **Workbenches.** Create a Workbench per production line with its category, three warehouses, Cost Center and the users allowed on it.
 4. **Items.** Mark factory output with *Is Final Product* and a Product Category; mark inputs with *Is Raw Material* and list them in the Raw Materials table of the final product.
 5. **Users and roles.** See [Roles](#roles).
@@ -143,8 +143,8 @@ Run the daily stock count first. The closing screen blocks confirmation until it
 
 | Role | Can |
 |---|---|
-| Any logged-in user with a POS Profile | Sell, receive, count, waste, close their shift |
-| **POS Manager** | Also return, edit and cancel submitted invoices; edit kitchen notes |
+| Users listed in a POS Profile (`applicable_for_users`) | Sell, receive, count, waste, close their shift, on that profile only. No role is exempt, and a profile with no users admits nobody |
+| **POS Manager** | Also return, edit and cancel submitted invoices of the profiles they are listed in; edit kitchen notes |
 | **Manufacturing User / Manufacture Operator / Stock User** | Enter production data on their assigned workbenches (no cost shown); post it, or send it for review, per *Worker Submission* |
 | **Manufacture Supervisor / Manufacturing Manager** | Post production runs and see rates and costs |
 | **System Manager** | Everything |

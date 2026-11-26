@@ -11,15 +11,20 @@ export const pos = reactive({
   notes: [], // free kitchen notes from the Los Andalus Kitchen Note doctype
   incoming: 0, // transfers waiting to be received — drives the sidebar badge
   ready: false,
+  error: "", // why the POS config could not load (e.g. no assigned POS Profile)
 })
 
 export async function ensurePos() {
   if (pos.ready) return
-  pos.config = await getPosConfig().catch(() => null)
+  pos.error = ""
+  pos.config = await getPosConfig().catch((e) => {
+    pos.error = e.message
+    return null
+  })
   pos.shift = await checkOpeningShift().catch(() => null)
   pos.extras = (await getPosExtras().catch(() => [])) || []
   pos.notes = (await getPosNotes().catch(() => [])) || []
-  pos.ready = true
+  pos.ready = !!pos.config // not cached on failure: another user may sign in next
 }
 
 export function hasShift() {

@@ -32,17 +32,17 @@ def _require_pos_manager():
 
 
 def _resolve_pos_profile(name=None):
-	"""Pick the POS Profile: explicit arg → one the user is applicable for →
-	first enabled for the default company."""
+	"""The single POS access rule: a user works on a POS Profile only when listed in its
+	`applicable_for_users`. No role is exempt, and an empty table admits nobody.
+	Without a name, the user's default (else first) enabled profile is picked."""
 	if name:
 		if not frappe.db.exists("POS Profile", name):
 			frappe.throw(_("POS Profile {0} does not exist.").format(name))
 		if frappe.db.get_value("POS Profile", name, "disabled"):
 			frappe.throw(_("POS Profile {0} is disabled.").format(name))
-		assigned_users = frappe.get_all(
-			"POS Profile User", filters={"parent": name, "parenttype": "POS Profile"}, pluck="user"
-		)
-		if assigned_users and frappe.session.user not in assigned_users:
+		if not frappe.db.exists(
+			"POS Profile User", {"parent": name, "parenttype": "POS Profile", "user": frappe.session.user}
+		):
 			frappe.throw(_("POS Profile {0} is not assigned to this user.").format(name), frappe.PermissionError)
 		return frappe.get_cached_doc("POS Profile", name)
 
@@ -56,15 +56,7 @@ def _resolve_pos_profile(name=None):
 		if not frappe.db.get_value("POS Profile", row.parent, "disabled"):
 			return frappe.get_cached_doc("POS Profile", row.parent)
 
-	filters = {"disabled": 0}
-	company = frappe.defaults.get_global_default("company")
-	if company:
-		filters["company"] = company
-	first = frappe.get_all("POS Profile", filters=filters, limit=1, pluck="name")
-	if first:
-		return frappe.get_cached_doc("POS Profile", first[0])
-
-	frappe.throw(_("No POS Profile is configured. Create one in ERPNext first."))
+	frappe.throw(_("No POS Profile is assigned to this user."), frappe.PermissionError)
 
 
 def _stamp_branch(doc, profile):
@@ -279,9 +271,9 @@ def get_extras(pos_profile=None):
 	priced from the profile price list. Empty if the group/items are not set up —
 	the register then keeps add-on checkout blocked rather than guessing a price."""
 	_require_login()
+	p = _resolve_pos_profile(pos_profile)
 	if not frappe.db.exists("Item Group", ADDON_GROUP):
 		return []
-	p = _resolve_pos_profile(pos_profile)
 	allowed_groups = _expanded_item_groups(p)
 	if allowed_groups and ADDON_GROUP not in allowed_groups:
 		return []
@@ -325,6 +317,7 @@ def get_extras(pos_profile=None):
 def get_notes():
 	"""Free kitchen notes (no price, no stock) offered on the customize sheet."""
 	_require_login()
+	_resolve_pos_profile()
 	return frappe.get_all("Los Andalus Kitchen Note", filters={"enabled": 1}, order_by="note asc", pluck="note")
 
 
@@ -335,6 +328,7 @@ GIFT_MODE = "Gift Card"  # Mode of Payment used to tender a redeemed gift card
 def check_gift_card(code):
 	"""Look up a gift card by its code — returns its redeemable balance, or errors."""
 	_require_login()
+	_resolve_pos_profile()
 	gc = frappe.db.get_value(
 		"Los Andalus Gift Card", {"card_no": code, "is_active": 1}, ["card_no", "balance"], as_dict=True
 	)
@@ -383,7 +377,9 @@ def _ensure_gift_mode(company):
 def check_opening_shift():
 	"""Gate for entering the POS: returns the open shift or None."""
 	_require_login()
-	return _open_shift()
+	shift = _open_shift()
+	_resolve_pos_profile(shift and shift.get("pos_profile"))
+	return shift
 
 
 @frappe.whitelist()
@@ -394,6 +390,7 @@ def create_opening_shift(pos_profile, company, balances):
 		balances = json.loads(balances)
 	existing = _open_shift()
 	if existing:
+		_resolve_pos_profile(existing.get("pos_profile"))
 		return existing
 	profile = _resolve_pos_profile(pos_profile)
 	if company != profile.company:
@@ -558,13 +555,14 @@ def submit_order(
 	if not shift:
 		frappe.throw(_("Open a POS shift before selling."))
 
+	p = _resolve_pos_profile(pos_profile or shift.get("pos_profile"))
+
 	# Idempotency: check-first (blocks double-click / retry) — the primary guard.
 	if request_id:
-		existing = frappe.db.get_value("Sales Invoice", {"losand_pos_request_id": request_id}, "name")
+		existing = frappe.db.get_value("Sales Invoice", {"losand_pos_request_id": request_id, "owner": frappe.session.user}, "name")
 		if existing:
 			return _order_result(frappe.get_doc("Sales Invoice", existing), idempotent=True)
 
-	p = _resolve_pos_profile(pos_profile or shift.get("pos_profile"))
 	si = frappe.new_doc("Sales Invoice")
 	si.is_pos = 1
 	si.update_stock = cint(p.update_stock)
@@ -705,7 +703,12 @@ def _inv_warehouse(profile, warehouse=None):
 	goods arrive there by transfer (استلام الطلبات) and leave it by the end-of-day
 	count (الجرد اليومي). The factory's own store (cfg().source) belongs to the
 	manufacture app, not to a branch."""
-	wh = warehouse or profile.warehouse
+	if warehouse and warehouse != profile.warehouse:
+		frappe.throw(
+			_("Warehouse {0} does not belong to POS Profile {1}.").format(warehouse, profile.name),
+			frappe.PermissionError,
+		)
+	wh = profile.warehouse
 	if not wh:
 		frappe.throw(_("POS Profile {0} has no warehouse.").format(profile.name))
 	return wh
@@ -1130,6 +1133,7 @@ def park_order(payload, table=None, total=0, pos_profile=None):
 def list_parked():
 	"""The current user's parked orders."""
 	_require_login()
+	_resolve_pos_profile()
 	return frappe.get_all(
 		"Los Andalus Parked Order",
 		filters={"user": frappe.session.user},
@@ -1139,8 +1143,10 @@ def list_parked():
 
 
 def _own_parked(name):
-	if frappe.db.get_value("Los Andalus Parked Order", name, "user") != frappe.session.user:
+	row = frappe.db.get_value("Los Andalus Parked Order", name, ["user", "pos_profile"], as_dict=True)
+	if not row or row.user != frappe.session.user:
 		frappe.throw(_("Not your parked order."), frappe.PermissionError)
+	_resolve_pos_profile(row.pos_profile)
 
 
 @frappe.whitelist()
@@ -1272,6 +1278,7 @@ def close_shift(counted=None):
 	shift = _open_shift()
 	if not shift:
 		frappe.throw(_("No open shift."))
+	_resolve_pos_profile(shift.get("pos_profile"))
 	opening, start, end, sales_total, _count, recon = _shift_reconciliation(shift)
 	stock = _shift_stock(opening, start)
 	# A shift cannot close before the day's stock count (الجرد اليومي) is done.
@@ -1321,6 +1328,7 @@ def get_shift_invoices():
 	shift = _open_shift()
 	if not shift:
 		frappe.throw(_("No open shift."))
+	_resolve_pos_profile(shift.get("pos_profile"))
 	opening = frappe.get_doc("POS Opening Entry", shift["name"])
 	return frappe.get_all(
 		"Sales Invoice",
@@ -1338,6 +1346,15 @@ def get_shift_invoices():
 	)
 
 
+def _branch_invoice(invoice):
+	"""A POS invoice belonging to a profile the user is listed on."""
+	doc = frappe.get_doc("Sales Invoice", invoice)
+	if not doc.is_pos or not doc.pos_profile:
+		frappe.throw(_("{0} is not a POS invoice.").format(invoice), frappe.PermissionError)
+	_resolve_pos_profile(doc.pos_profile)
+	return doc
+
+
 @frappe.whitelist()
 def return_invoice(invoice):
 	"""Create and submit a return (credit note) against a submitted POS invoice —
@@ -1347,7 +1364,7 @@ def return_invoice(invoice):
 	_require_pos_manager()
 	from erpnext.controllers.sales_and_purchase_return import make_return_doc
 
-	original = frappe.get_doc("Sales Invoice", invoice)
+	original = _branch_invoice(invoice)
 	if original.docstatus != 1:
 		frappe.throw(_("Only a submitted invoice can be returned."))
 	return_doc = make_return_doc("Sales Invoice", invoice)
@@ -1370,7 +1387,7 @@ def edit_invoice(invoice):
 	original pieces/extras structure. The cashier re-applies any customization."""
 	_require_login()
 	_require_pos_manager()
-	doc = frappe.get_doc("Sales Invoice", invoice)
+	doc = _branch_invoice(invoice)
 	if doc.docstatus != 1:
 		frappe.throw(_("Only a submitted invoice can be edited."))
 	merged = {}
@@ -1398,7 +1415,7 @@ def cancel_invoice(invoice):
 	the cancelled docstatus is the audit trail of what was voided and by whom."""
 	_require_login()
 	_require_pos_manager()
-	doc = frappe.get_doc("Sales Invoice", invoice)
+	doc = _branch_invoice(invoice)
 	if doc.docstatus != 1:
 		frappe.throw(_("Only a submitted invoice can be cancelled."))
 	doc.flags.ignore_permissions = True

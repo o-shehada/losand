@@ -70,7 +70,7 @@ async function openShift() {
         <p v-if="!cashMethods.length" class="text-center text-pos-muted text-xs font-semibold py-4">لا توجد طريقة دفع نقدي في ملف نقاط البيع</p>
       </div>
 
-      <p v-if="error" class="text-xs text-pos-danger font-bold mb-3 text-center">{{ error }}</p>
+      <p v-if="error || pos.error" class="text-xs text-pos-danger font-bold mb-3 text-center">{{ error || pos.error }}</p>
 
       <button
         @click="openShift"

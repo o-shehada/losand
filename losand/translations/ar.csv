@@ -154,3 +154,6 @@
 "You do not have permission to review drafts.","ليست لديك صلاحية مراجعة المسودات."
 "Batch {0} is no longer a draft.","الدفعة {0} لم تعد مسودة."
 "This draft belongs to another user.","هذه المسودة تخص مستخدماً آخر."
+"No POS Profile is assigned to this user.","لا يوجد ملف نقطة بيع مخصص لهذا المستخدم."
+"Warehouse {0} does not belong to POS Profile {1}.","المخزن {0} لا يتبع ملف نقطة البيع {1}."
+"{0} is not a POS invoice.","{0} ليست فاتورة نقطة بيع."

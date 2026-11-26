@@ -2,6 +2,7 @@ import unittest
 
 import frappe
 
+from losand.api import pos
 from losand.api.pos import (
 	_resolve_pos_profile,
 	get_stocktake_items,
@@ -12,6 +13,24 @@ from losand.api.pos import (
 	get_transfer,
 	list_incoming_transfers,
 )
+
+
+def setUpModule():
+	"""POS access needs a listed user: put Administrator on a profile for these tests."""
+	frappe.set_user("Administrator")
+	if frappe.db.exists("POS Profile User", {"user": "Administrator", "parenttype": "POS Profile"}):
+		return
+	profile = frappe.get_doc("POS Profile", frappe.get_all("POS Profile", {"disabled": 0}, pluck="name", limit=1)[0])
+	row = profile.append("applicable_for_users", {"user": "Administrator"})
+	row.db_insert()
+	frappe.db.commit()
+	unittest.addModuleCleanup(_unassign, row.name)
+
+
+def _unassign(row_name):
+	frappe.set_user("Administrator")
+	frappe.db.delete("POS Profile User", {"name": row_name})
+	frappe.db.commit()
 
 
 PROFILE_BEHAVIOR_KEYS = {
@@ -227,3 +246,56 @@ class TestPosStocktake(unittest.TestCase):
 		back.insert(ignore_permissions=True)
 		back.submit()
 		frappe.db.commit()
+
+
+class TestPosAccess(unittest.TestCase):
+	"""Only users listed in a POS Profile's applicable_for_users may use it."""
+
+	OUTSIDER = "pos-outsider@example.com"
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.profile = _resolve_pos_profile()
+		if not frappe.db.exists("User", self.OUTSIDER):
+			frappe.get_doc(
+				{"doctype": "User", "email": self.OUTSIDER, "first_name": "Outsider", "send_welcome_email": 0}
+			).insert(ignore_permissions=True)
+		# even a System Manager is refused unless listed
+		frappe.get_doc("User", self.OUTSIDER).add_roles("System Manager")
+		frappe.set_user(self.OUTSIDER)
+		self.addCleanup(frappe.set_user, "Administrator")
+
+	def test_unlisted_user_is_refused_everywhere(self):
+		calls = {
+			"default profile": lambda: _resolve_pos_profile(),
+			"named profile": lambda: _resolve_pos_profile(self.profile.name),
+			"config": pos.get_pos_config,
+			"products": pos.get_products,
+			"extras": pos.get_extras,
+			"notes": pos.get_notes,
+			"gift card": lambda: pos.check_gift_card("x"),
+			"shift gate": pos.check_opening_shift,
+			"count sheet": get_stocktake_items,
+			"count save": lambda: save_stocktake([]),
+			"waste": lambda: pos.save_waste([]),
+			"incoming": list_incoming_transfers,
+			"parked": pos.list_parked,
+		}
+		for label, call in calls.items():
+			with self.subTest(label), self.assertRaises(frappe.PermissionError):
+				call()
+
+	def test_listed_user_cannot_pick_another_warehouse(self):
+		frappe.set_user("Administrator")
+		with self.assertRaises(frappe.PermissionError):
+			get_stocktake_items(warehouse="Not This Branch")
+
+	def test_manager_cannot_cancel_another_branch_invoice(self):
+		frappe.set_user("Administrator")
+		name = frappe.db.get_value("Sales Invoice", {"is_pos": 1, "docstatus": 1, "pos_profile": ["is", "set"]})
+		if not name:
+			self.skipTest("No submitted POS invoice")
+		frappe.set_user(self.OUTSIDER)
+		for call in (pos.cancel_invoice, pos.edit_invoice, pos.return_invoice):
+			with self.subTest(call.__name__), self.assertRaises(frappe.PermissionError):
+				call(name)
