@@ -87,8 +87,6 @@ const visibleProducts = computed(() => {
 
 const hasAvailableQty = (product) => product.available_qty !== null && product.available_qty !== undefined
 const controlsStock = (product) => !!pos.config?.update_stock && product.is_stock_item === true
-const formatQty = (value) =>
-  new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(Number(value) || 0)
 const formatMoney = (value) =>
   `${Number(value || 0).toFixed(2)} ${pos.config?.currency_symbol || pos.config?.currency || "د.ل"}`
 const productInCartQty = (product) => cart.value.find((line) => line.id === product.id)?.pieces.length || 0
@@ -312,7 +310,7 @@ const stockIssue = computed(() => {
 const blockReason = computed(() => {
   if (stockIssue.value) {
     if (stockIssue.value.available <= 0) return `الصنف "${stockIssue.value.name}" غير متوفر حالياً`
-    return `الكمية المتاحة من "${stockIssue.value.name}" هي ${formatQty(stockIssue.value.available)} ${stockIssue.value.uom || ""}`
+    return `الكمية المطلوبة من "${stockIssue.value.name}" غير متوفرة`
   }
   if (quote.loading) return "جارٍ حساب الأسعار والضرائب…"
   if (hasPaidExtras.value && !extrasResolved.value) return "قائمة الإضافات غير محمّلة — أعد المحاولة"
@@ -611,15 +609,6 @@ function sheetDone(res) {
             </div>
             <div class="p-3 flex flex-col gap-2 flex-1">
               <p class="font-bold text-gray-800 text-sm leading-tight">{{ p.name }}</p>
-              <div
-                v-if="p.is_stock_item && hasAvailableQty(p)"
-                class="flex items-center gap-1.5 text-xs font-bold"
-                :class="Number(p.available_qty) > 0 ? 'text-pos-green' : 'text-pos-danger'"
-              >
-                <i class="fa-solid fa-boxes-stacked text-[10px]"></i>
-                <span>المتاح:</span>
-                <span dir="ltr">{{ formatQty(p.available_qty) }} {{ p.uom || "" }}</span>
-              </div>
               <div class="mt-auto flex items-center justify-between">
                 <span class="text-pos-brand-dark font-extrabold text-sm">{{ formatMoney(p.price) }}</span>
                 <button

@@ -15,6 +15,10 @@ const loading = ref(true)
 const submitting = ref(false)
 const error = ref("")
 const done = ref(null)
+// Both tables render 20 rows at a time. Display only: counts, stats and saving use all rows.
+const PAGE = 20
+const shown = ref(PAGE)
+const wasteShown = ref(PAGE)
 
 onMounted(async () => {
   try {
@@ -172,7 +176,7 @@ function resetWaste() {
       </div>
       <div class="divide-y divide-pos-border">
         <div v-if="loading" class="text-center text-pos-muted py-16 font-semibold"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block opacity-60"></i> جارٍ التحميل…</div>
-        <div v-for="it in rows" :key="it.id" class="grid grid-cols-12 px-4 py-3 items-center">
+        <div v-for="it in rows.slice(0, shown)" :key="it.id" class="grid grid-cols-12 px-4 py-3 items-center">
           <div class="col-span-5 flex items-center gap-3">
             <div class="w-9 h-9 rounded-xl bg-pos-brand-light flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-box text-pos-brand text-sm"></i></div>
             <div><p class="text-sm font-bold text-gray-800 leading-tight">{{ it.name }}</p><p class="text-[10px] text-pos-muted font-semibold">{{ it.id }}</p></div>
@@ -196,6 +200,9 @@ function resetWaste() {
             <span v-else class="text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-pos-danger/10 text-pos-danger flex items-center gap-1 w-fit"><i class="fa-solid fa-arrow-down text-[10px]"></i> نقص {{ ar(Math.abs(variance(it))) }}</span>
           </div>
         </div>
+        <button v-if="rows.length > shown" type="button" @click="shown += PAGE" class="pos-btn w-full min-h-[44px] text-xs font-extrabold text-pos-brand-dark hover:bg-pos-brand-light">
+          عرض المزيد ({{ ar(rows.length - shown) }})
+        </button>
         <div v-if="!loading && !rows.length" class="text-center text-pos-muted py-10 font-semibold">
           <i class="fa-solid fa-sliders text-xl mb-2 block opacity-60"></i>
           لم تُحدَّد أصناف الجرد في ملف نقطة البيع
@@ -231,7 +238,7 @@ function resetWaste() {
       </div>
       <div class="divide-y divide-pos-border">
         <div v-if="wasteLoading" class="text-center text-pos-muted py-10 font-semibold"><i class="fa-solid fa-spinner fa-spin text-xl mb-2 block opacity-60"></i> جارٍ التحميل…</div>
-        <div v-for="p in wasteRows" :key="p.id" class="grid grid-cols-12 px-4 py-3 items-center">
+        <div v-for="p in wasteRows.slice(0, wasteShown)" :key="p.id" class="grid grid-cols-12 px-4 py-3 items-center">
           <div class="col-span-4 flex items-center gap-3">
             <div class="w-9 h-9 rounded-xl bg-pos-danger-light flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-burger text-pos-danger text-sm"></i></div>
             <div><p class="text-sm font-bold text-gray-800 leading-tight">{{ p.name }}</p><p class="text-[10px] text-pos-muted font-semibold">{{ p.id }}</p></div>
@@ -259,6 +266,9 @@ function resetWaste() {
             <p v-if="overWasted(p)" class="text-[10px] text-pos-danger font-bold mt-1">أكبر من المتاح ({{ ar(p.system_qty) }})</p>
           </div>
         </div>
+        <button v-if="wasteRows.length > wasteShown" type="button" @click="wasteShown += PAGE" class="pos-btn w-full min-h-[44px] text-xs font-extrabold text-pos-brand-dark hover:bg-pos-brand-light">
+          عرض المزيد ({{ ar(wasteRows.length - wasteShown) }})
+        </button>
         <div v-if="!wasteLoading && !wasteRows.length" class="text-center text-pos-muted py-10 font-semibold">
           <i class="fa-solid fa-sliders text-xl mb-2 block opacity-60"></i>
           لم تُحدَّد أصناف الهالك في ملف نقطة البيع
