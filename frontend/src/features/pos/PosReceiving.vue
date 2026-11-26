@@ -126,7 +126,7 @@ function reset() {
   </div>
 
   <!-- BODY -->
-  <div class="flex-1 overflow-y-auto p-3 md:p-4 flex flex-col gap-4">
+  <div class="flex-1 overflow-y-auto p-3 md:p-4 flex flex-col gap-4 [&>*]:flex-shrink-0">
     <!-- INBOX -->
     <template v-if="!open">
       <div v-if="loading" class="text-center text-pos-muted py-16 font-semibold"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block opacity-60"></i> جارٍ التحميل…</div>

@@ -158,7 +158,7 @@ function resetWaste() {
   </div>
 
   <!-- TABLES -->
-  <div class="flex-1 overflow-y-auto flex flex-col gap-4 p-3 md:p-4">
+  <div class="flex-1 overflow-y-auto flex flex-col gap-4 p-3 md:p-4 [&>*]:flex-shrink-0">
     <div class="bg-pos-surface rounded-xl2 border border-pos-border shadow-sm flex flex-col overflow-hidden">
       <div class="px-4 py-2.5 border-b border-pos-border flex items-center gap-2 bg-pos-brand-light/40">
         <i class="fa-solid fa-boxes-stacked text-pos-brand text-xs"></i>
